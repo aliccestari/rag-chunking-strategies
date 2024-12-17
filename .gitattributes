@@ -1,0 +1,2 @@
+semeval/corpora/document_level/*.jsonl filter=lfs diff=lfs merge=lfs -text
+semeval/corpora/passage_level/*.jsonl filter=lfs diff=lfs merge=lfs -text
