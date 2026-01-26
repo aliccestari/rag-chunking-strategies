@@ -171,6 +171,17 @@ python scripts/evaluation/run_generation_eval.py -i <INPUT_FILE> -o <OUTPUT_FILE
 > Our implementation for evaluting with GPT assumes an Azure endpoint. If you are using an alternate endpoint, you will need to modify the client [see here](azure_openai_client.py#L8). 
 
 
+To run a Judge with vLLM server (Recommended)
+
+```
+vllm serve <MODEL_NAME> --port 8001
+python scripts/evaluation/run_generation_eval.py -i <INPUT_FILE> -o <OUTPUT_FILE> -e scripts/evaluation/config.yaml --provider vllm --judge_model <MODEL_NAME>
+```
+
+> [!NOTE]
+> We recommend using vLLM over the HuggingFace backend for better performance and ease of use.
+
+
 To run HuggingFace model as Judge
 
 ```
@@ -182,6 +193,6 @@ Arguments
 * input_file: Path to a JSONL file containing predictions from the generative model under `predictions`.
 * output_file: Path to the output file, which would contain all the evaluated metrics under `metrics`
 * OpenAI key and Azure Endpoint if provider is openai
-* Huggingface model name if provider is hf
+* Huggingface model name if provider is hf or vllm
 
 Please see [paper](https://arxiv.org/abs/2501.03468) for the explanation of the metrics.

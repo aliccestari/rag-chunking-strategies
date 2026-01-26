@@ -13,6 +13,7 @@ from langchain_openai.embeddings import AzureOpenAIEmbeddings
 
 from huggingface_client import HuggingFaceLLMClient
 from azure_openai_client import AzureOpenAIClient
+# from idk_eval import *
 
 from datasets import Dataset
 from typing import List, Optional, Any
@@ -28,12 +29,24 @@ warnings.filterwarnings('ignore')
 
 import torch
 import gc
+from langchain_openai import ChatOpenAI
 
 def clear_cuda():
     gc.collect()
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
         torch.cuda.ipc_collect()
+
+def load_chat_openai_llm(judge_model, max_new_tokens = None):
+    
+    model = ChatOpenAI(
+        model= judge_model,
+        base_url="http://localhost:8001/v1",
+        api_key="dummy-key",   
+        max_tokens = max_new_tokens,              
+    )
+    
+    return model
 
 # ================================================
 # Local LLM class for running RAGAS locally
@@ -120,12 +133,11 @@ def get_idk_conditioned_metrics(input_file, output_file):
     model_predictions = remove_keys_from_df(model_predictions, keys_to_remove)
 
     model_predictions.to_json(output_file, orient="records", lines=True)
-    
 
 # ================================================
 # Compute RAGAS Locally
 # ================================================
-def run_ragas_judges_local(judge_model, input_file, output_file):
+def run_ragas_judges_local(provider, judge_model, input_file, output_file):
     clear_cuda()
     model_predictions = read_json_with_pandas(filepath=f"{input_file}")
     
@@ -142,7 +154,10 @@ def run_ragas_judges_local(judge_model, input_file, output_file):
     
     run_config = RunConfig(timeout=10000, max_workers= 1)
     
-    model = LangchainLLMWrapper(LocalLLM(judge_model), run_config)
+    if provider == "hf":
+        model = LangchainLLMWrapper(LocalLLM(judge_model), run_config)
+    if provider == "vllm":
+        model = load_chat_openai_llm(judge_model)
 
     score = evaluate(
         dataset,
@@ -164,9 +179,6 @@ def run_ragas_judges_local(judge_model, input_file, output_file):
     model_predictions = remove_keys_from_df(model_predictions, keys_to_remove)
 
     model_predictions.to_json(output_file, orient="records", lines=True)
-    
-    
-
 # ================================================
 # Compute RAGAS w/ OpenAI
 # ================================================
@@ -228,7 +240,7 @@ def run_ragas_judges_openai(input_file, output_file, openai_key, azure_host):
 # ================================================
 # Run Radbench Judge
 # ================================================
-def run_radbench_judge(judge_model, input_file, output_file):
+def run_radbench_judge(provider, judge_model, input_file, output_file):
     model_predictions = read_json_with_pandas(filepath=f"{input_file}")
 
     model_predictions['inquiry'] = model_predictions['input'].apply(extract_conversation)
@@ -251,13 +263,24 @@ def run_radbench_judge(judge_model, input_file, output_file):
             client = AzureOpenAIClient('gpt-4o-mini-2024-07-18')
         else:
             clear_cuda()
-            client = HuggingFaceLLMClient(model_name)
+            
+            if provider == "hf":
+                client = HuggingFaceLLMClient(model_name)
+            
+            if provider == "vllm":
+                llm_model = load_chat_openai_llm(model_name)
         
         output_lst = ['' for i in range(len(user_inputs))]
         
         i=0
         for user_input in tqdm(user_inputs):
-            output = client.generate_response(user_input)
+            if model_name.startswith("gpt-") or provider == "hf":
+                output = client.generate_response(user_input)
+            else:
+                response_obj = llm_model(user_input)
+                output = response_obj.content
+                
+            # print(f"model generated: {output}")
             output_lst[i] = output
             i += 1
     
@@ -282,13 +305,16 @@ def run_radbench_judge(judge_model, input_file, output_file):
 # ================================================
 # Run IDK Judge
 # ================================================
-def run_idk_judge(model_name, input_file, output_file):    
+def run_idk_judge(provider, model_name, input_file, output_file):    
     
-    if model_name == "openai":
+    if provider == "openai":
         client = AzureOpenAIClient('gpt-4o-mini-2024-07-18')
     else:
-        clear_cuda()
-        client = HuggingFaceLLMClient(model_name)
+        if provider == "hf":
+            clear_cuda()
+            client = HuggingFaceLLMClient(model_name)
+        if provider == "vllm":
+            llm_model = load_chat_openai_llm(model_name)
         
     model_predictions = read_json_with_pandas(filepath=f"{input_file}")
     
@@ -299,10 +325,13 @@ def run_idk_judge(model_name, input_file, output_file):
     
     response_lst = []
     for cur_prompt in tqdm(formatted_conversations):
-        if model_name == "openai":
+        if provider == "openai" or provider == "hf":
             response = client.generate_response(cur_prompt)
+            # response = client.generate_response(cur_prompt, max_new_tokens = 3)
         else:
-            response = client.generate_response(cur_prompt, max_new_tokens = 3)
+            response_obj = llm_model(cur_prompt)
+            response = response_obj.content
+        # print("IDK Model Response:", response)
         response_lst.append(response)
             
     model_predictions['idk_eval'] = response_lst
