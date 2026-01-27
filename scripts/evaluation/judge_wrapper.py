@@ -252,7 +252,7 @@ def run_radbench_judge(provider, judge_model, input_file, output_file):
     
     user_inputs = format_conversation_radbench(model_predictions)
     
-    if judge_model == "openai":
+    if provider == "openai":
         model_name_lst = ['gpt-4o-mini-2024-07-18']
     else:
         model_name_lst = [judge_model]
