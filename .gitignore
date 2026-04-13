@@ -1,0 +1,8 @@
+.env
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Chroma / índices vetoriais locais (recriar com o pipeline, não versionar)
+tcc_implementation/db/
+tcc_implementation/db_local_*/
