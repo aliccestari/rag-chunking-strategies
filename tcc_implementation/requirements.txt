@@ -113,3 +113,11 @@ xxhash==3.6.0
 yarl==1.23.0
 zipp==3.23.0
 zstandard==0.25.0
+
+# Chat Gemini no main.py | BGE local via sentence-transformers
+langchain-google-genai>=4.0.0
+sentence-transformers>=3.0.1
+transformers>=4.40.0
+accelerate>=0.30.0
+torch>=2.2.0
+pytrec_eval>=0.5
