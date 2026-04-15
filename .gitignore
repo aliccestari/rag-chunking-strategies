@@ -2,6 +2,7 @@
 __pycache__/
 *.py[cod]
 *$py.class
+.DS_Store
 
 # Chroma / índices vetoriais locais (recriar com o pipeline, não versionar)
 tcc_implementation/db/
