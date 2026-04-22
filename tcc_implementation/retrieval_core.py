@@ -1,5 +1,8 @@
 """
 Recuperação via Chroma + BGE (mesmo índice que `criar_db.py`), com deduplicação por id de passagem.
+
+Modo multi-scale: depois de ranquear por chunk pequeno, pode substituir `text` (e `title`)
+pelo conteúdo completo da passagem a partir do mapa do corpus.
 """
 
 from __future__ import annotations
@@ -16,7 +19,7 @@ def abrir_indice(persist_directory: str | Path) -> Chroma:
     if not pasta.is_dir():
         raise FileNotFoundError(
             f"Índice Chroma não encontrado: {pasta.resolve()}\n"
-            "Rode criar_db.py com o mesmo domínio (ou ajuste corpus_config.DOMINIO_ATUAL)."
+            "Rode criar_db.py com o mesmo domínio/estratégia (veja corpus_config / --strategy)."
         )
     emb = criar_funcao_embedding()
     return Chroma(persist_directory=str(pasta), embedding_function=emb)
@@ -28,10 +31,14 @@ def recuperar_passagens_unicas(
     top_k: int = 10,
     candidatos: int = 30,
     limiar: float | None = None,
+    mapa_passagem_completa: dict[str, dict] | None = None,
+    expandir_texto_passagem: bool = False,
 ) -> list[tuple[str, float, str, str]]:
     """
     Retorna lista de (passage_id, score, texto, titulo) ordenada por score decrescente.
-    Vários chunks do mesmo pai colapsam num único id (melhor score).
+
+    Se expandir_texto_passagem e mapa_passagem_completa: após escolher o melhor score
+    por passage_id, substitui texto/título pelo do JSONL (estratégia multi-scale).
     """
     k_busca = max(candidatos, top_k * 4)
     pares = db.similarity_search_with_relevance_scores(consulta, k=k_busca)
@@ -51,6 +58,11 @@ def recuperar_passagens_unicas(
     ordenado = sorted(melhor_por_id.items(), key=lambda x: -x[1][0])
     saida: list[tuple[str, float, str, str]] = []
     for pid, (sc, texto, tit) in ordenado[:top_k]:
+        if expandir_texto_passagem and mapa_passagem_completa:
+            info = mapa_passagem_completa.get(pid)
+            if info:
+                texto = str(info.get("text") or texto)
+                tit = str(info.get("title") or tit)
         saida.append((pid, sc, texto, tit))
     return saida
 

@@ -2,21 +2,27 @@
 """
 CLI para Subtasks A, B e C (corpus passage_level + índice Chroma local).
 
-Exemplos (na pasta tcc_implementation, com DOMINIO_ATUAL alinhado ao índice):
+Chunking / TCC (após criar índices com `python criar_db.py --domain X --strategy small|large|legacy`):
 
-  # A — predições retrieval (JSONL)
+  # Índices: legacy -> db_local_bge_<dom>; small -> db_local_bge_<dom>_small; large -> db_local_bge_<dom>_large
+  # multiscale usa o índice *_small e expande o texto para a passagem completa na saída.
+
+  python run_mtrag.py task-a --domain govt --queries lastturn --chunking small -o preds_a_small.jsonl
+  python run_mtrag.py task-c --domain govt --queries lastturn --chunking multiscale -o preds_c_ms.jsonl
+
+  # Baseline sem retrieval (só LLM)
+  python run_mtrag.py task-c --domain govt --queries lastturn --baseline noretrieval -o preds_c_nr.jsonl
+
+  # Log de tempos por turno (CSV) para análise de latência / H3
+  python run_mtrag.py task-c --domain govt --chunking large --timing-log timings_c.csv -o preds.jsonl
+
+Exemplos com pasta manual:
+
   python run_mtrag.py task-a --domain govt --queries lastturn --index-dir db_local_bge_govt -o preds_govt_a.jsonl
 
-  # Métricas A (pytrec)
   python run_mtrag.py eval-a --domain govt --predictions preds_govt_a.jsonl
 
-  # B — geração só com passagens ouro (sem índice)
   python run_mtrag.py task-b --domain govt --queries lastturn -o preds_govt_b.jsonl
-
-  # C — RAG completo (recuperação + geração local)
-  python run_mtrag.py task-c --domain govt --queries lastturn --index-dir db_local_bge_govt -o preds_govt_c.jsonl
-
-Limite de linhas (--limit) útil para smoke test.
 
 Avaliação oficial (formato SemEval):
   python run_mtrag.py format-check --task c --domain govt --predictions preds_govt_c.jsonl
@@ -29,6 +35,7 @@ gen-eval precisa das dependências em semeval/scripts/evaluation/requirements.tx
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import os
 import subprocess
@@ -49,8 +56,10 @@ from mtrag_subtasks import (
     carregar_qrels_por_query,
     indice_para_dominio,
     iter_linhas_queries,
+    num_turnos_utilizador,
     task_a_um_turno,
     task_b_um_turno,
+    task_c_sem_rag_um_turno,
     task_c_um_turno,
 )
 from retrieval_metrics import eval_predictions_file
@@ -98,12 +107,52 @@ def _imprimir_progresso(etiqueta: str, feitos: int, total: int, t0_loop: float) 
     )
 
 
+def _resolver_pasta_indice(args: argparse.Namespace) -> Path:
+    """Pasta Chroma: --index-dir tem prioridade; senão usa --domain + --chunking."""
+    if getattr(args, "index_dir", None):
+        return Path(args.index_dir)
+    ch = getattr(args, "chunking", "legacy") or "legacy"
+    return Path(pasta_indice_chroma(args.domain, ch))
+
+
 def _abrir_indice_arg(args: argparse.Namespace) -> Path:
-    pasta = Path(args.index_dir) if args.index_dir else Path(pasta_indice_chroma())
+    pasta = _resolver_pasta_indice(args)
     if not pasta.is_dir():
-        sys.stderr.write(f"Índice não encontrado: {pasta.resolve()}\n")
+        sys.stderr.write(
+            f"Índice não encontrado: {pasta.resolve()}\n"
+            "Rode: python criar_db.py --domain <dom> --strategy small|large|legacy\n"
+        )
         sys.exit(1)
     return pasta
+
+
+def _mapa_se_precisa(args: argparse.Namespace) -> dict[str, dict] | None:
+    if getattr(args, "chunking", None) == "multiscale":
+        return carregar_mapa_passagens(caminho_corpus_passage(args.domain))
+    return None
+
+
+def _expandir_multiscale(args: argparse.Namespace) -> bool:
+    return getattr(args, "chunking", None) == "multiscale"
+
+
+def _abrir_timing_log(path: str | None) -> tuple[object, csv.DictWriter] | tuple[None, None]:
+    if not path:
+        return None, None
+    f = open(path, "w", newline="", encoding="utf-8")
+    fieldnames = [
+        "task_id",
+        "domain",
+        "chunking",
+        "baseline",
+        "num_turnos",
+        "retrieval_sec",
+        "generation_sec",
+        "total_sec",
+    ]
+    w = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
+    w.writeheader()
+    return f, w
 
 
 def cmd_task_a(args: argparse.Namespace) -> None:
@@ -111,26 +160,51 @@ def cmd_task_a(args: argparse.Namespace) -> None:
     pasta = _abrir_indice_arg(args)
     db = indice_para_dominio(pasta)
     caminho_q = caminho_queries_jsonl(args.domain, args.queries)
+    mapa = _mapa_se_precisa(args)
+    expand = _expandir_multiscale(args)
     total = _total_jobs(_contar_linhas_jsonl_nao_vazias(caminho_q), args.limit)
     out = Path(args.output)
+    tf, tw = _abrir_timing_log(getattr(args, "timing_log", None))
     n = 0
     t0_loop = time.perf_counter()
-    with out.open("w", encoding="utf-8") as sink:
-        for task_id, texto in iter_linhas_queries(caminho_q):
-            if args.limit is not None and n >= args.limit:
-                break
-            reg = task_a_um_turno(
-                db,
-                args.domain,
-                task_id,
-                texto,
-                top_k=args.top_k,
-                limiar=args.limiar,
-                candidatos=args.candidatos,
-            )
-            sink.write(json.dumps(reg, ensure_ascii=False) + "\n")
-            n += 1
-            _imprimir_progresso("Task A", n, total, t0_loop)
+    try:
+        with out.open("w", encoding="utf-8") as sink:
+            for task_id, texto in iter_linhas_queries(caminho_q):
+                if args.limit is not None and n >= args.limit:
+                    break
+                t0r = time.perf_counter()
+                reg = task_a_um_turno(
+                    db,
+                    args.domain,
+                    task_id,
+                    texto,
+                    top_k=args.top_k,
+                    limiar=args.limiar,
+                    candidatos=args.candidatos,
+                    mapa_passagens=mapa,
+                    expandir_passagem_completa=expand,
+                )
+                sink.write(json.dumps(reg, ensure_ascii=False) + "\n")
+                t_r = time.perf_counter() - t0r
+                if tw:
+                    tw.writerow(
+                        {
+                            "task_id": task_id,
+                            "domain": args.domain,
+                            "chunking": getattr(args, "chunking", "legacy"),
+                            "baseline": "rag",
+                            "num_turnos": num_turnos_utilizador(texto),
+                            "retrieval_sec": f"{t_r:.4f}",
+                            "generation_sec": "",
+                            "total_sec": f"{t_r:.4f}",
+                        }
+                    )
+                    tf.flush()
+                n += 1
+                _imprimir_progresso("Task A", n, total, t0_loop)
+    finally:
+        if tf:
+            tf.close()
     dt_loop = time.perf_counter() - t0_loop
     dt_all = time.perf_counter() - t0_all
     print(
@@ -181,30 +255,83 @@ def cmd_task_b(args: argparse.Namespace) -> None:
 
 def cmd_task_c(args: argparse.Namespace) -> None:
     t0_all = time.perf_counter()
-    pasta = _abrir_indice_arg(args)
-    db = indice_para_dominio(pasta)
+    baseline = getattr(args, "baseline", "rag") or "rag"
+    mapa = _mapa_se_precisa(args)
+    expand = _expandir_multiscale(args)
+    db = None
+    if baseline == "rag":
+        pasta = _abrir_indice_arg(args)
+        db = indice_para_dominio(pasta)
     caminho_q = caminho_queries_jsonl(args.domain, args.queries)
     total = _total_jobs(_contar_linhas_jsonl_nao_vazias(caminho_q), args.limit)
     out = Path(args.output)
+    tf, tw = _abrir_timing_log(getattr(args, "timing_log", None))
     n = 0
     t0_loop = time.perf_counter()
-    with out.open("w", encoding="utf-8") as sink:
-        for task_id, texto in iter_linhas_queries(caminho_q):
-            if args.limit is not None and n >= args.limit:
-                break
-            reg = task_c_um_turno(
-                db,
-                task_id,
-                texto,
-                args.domain,
-                top_k=args.top_k,
-                limiar=args.limiar,
-                max_new_tokens=args.max_new_tokens,
-                candidatos=args.candidatos,
-            )
-            sink.write(json.dumps(reg, ensure_ascii=False) + "\n")
-            n += 1
-            _imprimir_progresso("Task C", n, total, t0_loop)
+    ch = getattr(args, "chunking", "legacy") or "legacy"
+    try:
+        with out.open("w", encoding="utf-8") as sink:
+            for task_id, texto in iter_linhas_queries(caminho_q):
+                if args.limit is not None and n >= args.limit:
+                    break
+                t0_turn = time.perf_counter()
+                if baseline == "noretrieval":
+                    reg = task_c_sem_rag_um_turno(
+                        task_id,
+                        texto,
+                        args.domain,
+                        max_new_tokens=args.max_new_tokens,
+                    )
+                    dt = time.perf_counter() - t0_turn
+                    if tw:
+                        tw.writerow(
+                            {
+                                "task_id": task_id,
+                                "domain": args.domain,
+                                "chunking": "n/a",
+                                "baseline": baseline,
+                                "num_turnos": num_turnos_utilizador(texto),
+                                "retrieval_sec": "0",
+                                "generation_sec": f"{dt:.4f}",
+                                "total_sec": f"{dt:.4f}",
+                            }
+                        )
+                        tf.flush()
+                else:
+                    assert db is not None
+                    reg = task_c_um_turno(
+                        db,
+                        task_id,
+                        texto,
+                        args.domain,
+                        top_k=args.top_k,
+                        limiar=args.limiar,
+                        max_new_tokens=args.max_new_tokens,
+                        candidatos=args.candidatos,
+                        mapa_passagens=mapa,
+                        expandir_passagem_completa=expand,
+                    )
+                    dt = time.perf_counter() - t0_turn
+                    if tw:
+                        tw.writerow(
+                            {
+                                "task_id": task_id,
+                                "domain": args.domain,
+                                "chunking": ch,
+                                "baseline": baseline,
+                                "num_turnos": num_turnos_utilizador(texto),
+                                "retrieval_sec": "",
+                                "generation_sec": "",
+                                "total_sec": f"{dt:.4f}",
+                            }
+                        )
+                        tf.flush()
+                sink.write(json.dumps(reg, ensure_ascii=False) + "\n")
+                n += 1
+                _imprimir_progresso("Task C", n, total, t0_loop)
+    finally:
+        if tf is not None:
+            tf.close()
     dt_loop = time.perf_counter() - t0_loop
     dt_all = time.perf_counter() - t0_all
     print(
@@ -402,10 +529,28 @@ def main() -> None:
     p = argparse.ArgumentParser(description="MTRAG Subtasks A/B/C (local)")
     sub = p.add_subparsers(dest="cmd", required=True)
 
+    _chunking_choices = ["legacy", "small", "large", "multiscale"]
+
     pa = sub.add_parser("task-a", help="Subtask A: só retrieval")
     pa.add_argument("--domain", required=True, choices=["govt", "fiqa", "cloud", "clapnq"])
     pa.add_argument("--queries", default="lastturn", choices=["lastturn", "rewrite", "questions"])
-    pa.add_argument("--index-dir", default=None, help="Pasta Chroma (default: corpus_config.pasta_indice_chroma())")
+    pa.add_argument(
+        "--index-dir",
+        default=None,
+        help="Pasta Chroma (default: db_local_bge_<dom> ou _<estrategia> com --chunking)",
+    )
+    pa.add_argument(
+        "--chunking",
+        default="legacy",
+        choices=_chunking_choices,
+        help="Resolução de pasta se --index-dir omitido. multiscale usa índice *_small.",
+    )
+    pa.add_argument(
+        "--timing-log",
+        default=None,
+        metavar="CSV",
+        help="CSV opcional: latência por linha + num_turnos (análise H3 / relatório).",
+    )
     pa.add_argument("-o", "--output", required=True)
     pa.add_argument("--top-k", type=int, default=10)
     pa.add_argument("--candidatos", type=int, default=40)
@@ -426,6 +571,24 @@ def main() -> None:
     pc.add_argument("--domain", required=True, choices=["govt", "fiqa", "cloud", "clapnq"])
     pc.add_argument("--queries", default="lastturn", choices=["lastturn", "rewrite", "questions"])
     pc.add_argument("--index-dir", default=None)
+    pc.add_argument(
+        "--chunking",
+        default="legacy",
+        choices=_chunking_choices,
+        help="Pasta do índice se --index-dir omitido. Ignorado com --baseline noretrieval.",
+    )
+    pc.add_argument(
+        "--baseline",
+        default="rag",
+        choices=["rag", "noretrieval"],
+        help="rag: RAG completo; noretrieval: só LLM (sem documentos).",
+    )
+    pc.add_argument(
+        "--timing-log",
+        default=None,
+        metavar="CSV",
+        help="CSV opcional: tempo total por turno, num_turnos, chunking/baseline.",
+    )
     pc.add_argument("-o", "--output", required=True)
     pc.add_argument("--top-k", type=int, default=5)
     pc.add_argument("--candidatos", type=int, default=40)

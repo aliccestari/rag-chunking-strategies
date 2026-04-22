@@ -1,71 +1,46 @@
 """
 Script para criar a base vetorial (Chroma) a partir de documentos.
 
-Fluxo: carregar textos -> dividir em chunks -> embeddings BGE (local) -> salvar em disco.
-Execute uma vez por configuração; depois o main.py lê a mesma pasta.
+Fluxo: carregar textos -> dividir em chunks (estratégia TCC) -> embeddings BGE -> salvar.
 
-GOOGLE_API_KEY no .env só é usada pelo main.py para o Gemini gerar respostas (não para embedding).
+Estratégias (--strategy):
+  legacy   — chunk 2000/500 (compatível com índices antigos `db_local_bge_<dom>`)
+  small    — chunks pequenos (precisão na recuperação; base do multi-scale)
+  large    — chunks longos (mais contexto por vetor)
+  multiscale — alias: constrói o mesmo índice que `small` (recuperação fina + texto
+             de passagem completo na geração é feito em run_mtrag com --chunking multiscale)
+
+GOOGLE_API_KEY no .env só é usada pelo main.py para o Gemini (não para embedding).
 """
 
+import argparse
 import json
 import shutil
 from pathlib import Path
+
+from dotenv import load_dotenv
 from langchain_chroma.vectorstores import Chroma
 from langchain_community.document_loaders import PyPDFDirectoryLoader
 from langchain_core.documents import Document
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from dotenv import load_dotenv
-from corpus_config import DOMINIO_ATUAL, caminho_corpus_passage_level, pasta_indice_chroma
+
+from chunking_strategies import ChunkingStrategy, dividir_documentos
+from corpus_config import (
+    CORPUS_PASSAGE_FILES,
+    DOMINIO_ATUAL,
+    caminho_corpus_passage,
+    pasta_indice_chroma,
+)
 from embeddings_config import criar_funcao_embedding
 
 load_dotenv()
 
-# ---------------------------------------------------------------------------
-# Configuração simples (TCC: corpus oficial por domínio — veja corpus_config.py)
-# ---------------------------------------------------------------------------
-
-# "jsonl" = passagens MTRAG (domínio em DOMINIO_ATUAL). "pdf" = modo tutorial (pasta base/).
 FONTE = "jsonl"
-
 PASTA_BASE = "base"
-
-# None = indexa o JSONL inteiro do domínio atual. Int (ex. 500) = só primeiras N linhas (teste rápido).
 LIMITE_LINHAS: int | None = None
-
-# Quantos chunks processar por vez na RAM (ajuste se faltar memória).
 TAMANHO_LOTE_EMBEDDING = 256
-
-# Se True, apaga a pasta do índice antes de indexar (troca de corpus ou modo de embedding).
-RECRIAR_INDICE_DO_ZERO = False
-
-
-def criar_db():
-    print(f"Domínio: {DOMINIO_ATUAL} | pasta do índice: ./{pasta_indice_chroma()}/")
-    documentos = carregar_documentos()
-    chunks = dividir_chunks(documentos)
-    vetorizar_chunks(chunks)
-
-
-def carregar_documentos():
-    if FONTE == "pdf":
-        carregador = PyPDFDirectoryLoader(PASTA_BASE, glob="*.pdf")
-        return carregador.load()
-
-    if FONTE == "jsonl":
-        caminho = caminho_corpus_passage_level()
-        return carregar_jsonl(caminho, limite=LIMITE_LINHAS)
-
-    raise ValueError(f"FONTE deve ser 'pdf' ou 'jsonl', recebido: {FONTE}")
 
 
 def carregar_jsonl(caminho: Path, limite: int | None) -> list[Document]:
-    """
-    Cada linha do arquivo é um JSON com: _id (ou id), text, title, etc.
-
-    LangChain usa o objeto Document:
-    - page_content: texto que vai virar embedding;
-    - metadata: dicionário extra — aqui guardamos "id" da passagem (bate com qrels).
-    """
     documentos: list[Document] = []
     with caminho.open(encoding="utf-8") as arquivo:
         for indice, linha in enumerate(arquivo):
@@ -77,8 +52,7 @@ def carregar_jsonl(caminho: Path, limite: int | None) -> list[Document]:
             registro = json.loads(linha)
             passage_id = registro.get("_id") or registro.get("id")
             texto = registro.get("text", "")
-            titulo = registro.get("title", "")
-            # Título ajuda o modelo a situar o assunto; faz parte do que será embedado.
+            titulo = registro.get("title", "") or ""
             if titulo:
                 conteudo = f"{titulo}\n{texto}"
             else:
@@ -95,26 +69,9 @@ def carregar_jsonl(caminho: Path, limite: int | None) -> list[Document]:
     return documentos
 
 
-def dividir_chunks(documentos: list[Document]) -> list[Document]:
-    """
-    Parte textos longos em pedaços menores. O LangChain copia o metadata para cada pedaço
-    (o mesmo "id" de passagem permanece — útil quando um documento vira vários chunks).
-    """
-    separador = RecursiveCharacterTextSplitter(
-        chunk_size=2000,
-        chunk_overlap=500,
-        length_function=len,
-        add_start_index=True,
-    )
-    chunks = separador.split_documents(documentos)
-    print(f"Total de chunks após divisão: {len(chunks)}")
-    return chunks
-
-
-def vetorizar_chunks(chunks: list[Document]) -> None:
-    nome_pasta = pasta_indice_chroma()
+def vetorizar_chunks(chunks: list[Document], nome_pasta: str, recriar: bool) -> None:
     pasta = Path(nome_pasta)
-    if RECRIAR_INDICE_DO_ZERO and pasta.exists():
+    if recriar and pasta.exists():
         shutil.rmtree(pasta)
         print(f"Pasta antiga removida: {nome_pasta}")
 
@@ -131,5 +88,66 @@ def vetorizar_chunks(chunks: list[Document]) -> None:
     print(f"Banco salvo em ./{nome_pasta}")
 
 
+def criar_db(
+    dominio: str,
+    strategy: ChunkingStrategy,
+    limite_linhas: int | None,
+    recriar: bool,
+) -> None:
+    build_strategy: ChunkingStrategy
+    if strategy == "multiscale":
+        build_strategy = "small"
+        print(
+            "Estratégia multiscale: a construir o mesmo índice que 'small'. "
+            "Na avaliação, use run_mtrag --chunking multiscale (--index-dir opcional)."
+        )
+    else:
+        build_strategy = strategy
+
+    nome_pasta = pasta_indice_chroma(dominio, strategy if strategy != "multiscale" else "small")
+    caminho = caminho_corpus_passage(dominio)
+    print(f"Domínio: {dominio} | estratégia build: {build_strategy} | pasta: ./{nome_pasta}/")
+
+    if FONTE == "pdf":
+        carregador = PyPDFDirectoryLoader(PASTA_BASE, glob="*.pdf")
+        documentos = carregador.load()
+    else:
+        documentos = carregar_jsonl(caminho, limite=limite_linhas)
+
+    chunks = dividir_documentos(documentos, build_strategy)
+    print(f"Total de chunks após divisão: {len(chunks)}")
+    vetorizar_chunks(chunks, nome_pasta, recriar=recriar)
+
+
+def main() -> None:
+    doms = sorted(CORPUS_PASSAGE_FILES.keys())
+    ap = argparse.ArgumentParser(description="Cria índice Chroma BGE para MTRAG/TCC.")
+    ap.add_argument(
+        "--domain",
+        default=DOMINIO_ATUAL,
+        choices=doms,
+        help="Domínio do corpus passage_level (default: DOMINIO_ATUAL em corpus_config).",
+    )
+    ap.add_argument(
+        "--strategy",
+        default="legacy",
+        choices=["legacy", "small", "large", "multiscale"],
+        help="Política de chunking para o índice (multiscale = mesmo índice que small).",
+    )
+    ap.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Só as primeiras N passagens (teste rápido).",
+    )
+    ap.add_argument(
+        "--recrear",
+        action="store_true",
+        help="Apaga a pasta do índice antes de gravar.",
+    )
+    args = ap.parse_args()
+    criar_db(args.domain, args.strategy, args.limit, args.recrear)
+
+
 if __name__ == "__main__":
-    criar_db()
+    main()

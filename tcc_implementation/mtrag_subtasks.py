@@ -20,6 +20,11 @@ from rag_prompts import RAG_ANSWER_PROMPT
 from retrieval_core import abrir_indice, contexts_para_jsonl, recuperar_passagens_unicas
 
 
+def num_turnos_utilizador(texto_query: str) -> int:
+    """Número de turnos |user| no ficheiro BEIR (útil para análise H3 / comprimento de diálogo)."""
+    return len(texto_para_mensagens(texto_query))
+
+
 def indice_para_dominio(persist_directory: str | Path) -> Chroma:
     return abrir_indice(persist_directory)
 
@@ -99,10 +104,15 @@ def task_a_um_turno(
     top_k: int = 10,
     limiar: float | None = 0.0,
     candidatos: int = 40,
+    mapa_passagens: dict[str, dict] | None = None,
+    expandir_passagem_completa: bool = False,
 ) -> dict:
     """
     Uma linha JSONL para Subtask A: task_id, Collection, contexts[{document_id, text, score, title?}].
     A consulta de recuperação usa o texto completo (histórico multi-turn no formato BEIR).
+
+    expandir_passagem_completa: para multi-scale, preenche text/title com a passagem integral
+    do corpus (mantém scores do chunk pequeno).
     """
     recuperados = recuperar_passagens_unicas(
         db,
@@ -110,6 +120,8 @@ def task_a_um_turno(
         top_k=top_k,
         candidatos=candidatos,
         limiar=limiar,
+        mapa_passagem_completa=mapa_passagens,
+        expandir_texto_passagem=bool(expandir_passagem_completa and mapa_passagens),
     )
     ctx = contexts_para_jsonl(recuperados)
     return {
@@ -170,6 +182,8 @@ def task_c_um_turno(
     limiar: float | None = 0.0,
     max_new_tokens: int = 512,
     candidatos: int = 40,
+    mapa_passagens: dict[str, dict] | None = None,
+    expandir_passagem_completa: bool = False,
 ) -> dict:
     mensagens = texto_para_mensagens(texto_query)
     historico, pergunta = historico_e_pergunta_atual(mensagens)
@@ -181,8 +195,33 @@ def task_c_um_turno(
         top_k=top_k,
         limiar=limiar,
         candidatos=candidatos,
+        mapa_passagens=mapa_passagens,
+        expandir_passagem_completa=expandir_passagem_completa,
     )
     ctx = linha_a["contexts"]
+    prompt = montar_prompt_rag(historico, pergunta, ctx)
+    from local_llm import gerar_texto
+
+    resposta = gerar_texto(prompt, max_new_tokens=max_new_tokens)
+    return {
+        "task_id": task_id,
+        "Collection": COLLECTION_NAME[dominio],
+        "input": mensagens,
+        "contexts": ctx,
+        "predictions": [{"text": resposta}],
+    }
+
+
+def task_c_sem_rag_um_turno(
+    task_id: str,
+    texto_query: str,
+    dominio: str,
+    max_new_tokens: int = 512,
+) -> dict:
+    """Baseline: gerador sem documentos recuperados (contextos vazios)."""
+    mensagens = texto_para_mensagens(texto_query)
+    historico, pergunta = historico_e_pergunta_atual(mensagens)
+    ctx: list[dict] = []
     prompt = montar_prompt_rag(historico, pergunta, ctx)
     from local_llm import gerar_texto
 

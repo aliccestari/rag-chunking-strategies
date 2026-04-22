@@ -29,8 +29,23 @@ COLLECTION_NAME: dict[str, str] = {
 }
 
 
-def pasta_indice_chroma() -> str:
-    return f"db_local_bge_{DOMINIO_ATUAL}"
+def pasta_indice_chroma(
+    dominio: str | None = None,
+    strategy: str = "legacy",
+) -> str:
+    """
+    Pastas do Chroma por domínio e estratégia de chunking.
+    - legacy: `db_local_bge_{dom}` (comportamento antigo; mesmo nome que antes).
+    - small / large: `db_local_bge_{dom}_{strategy}`.
+    - multiscale: usa o **mesmo** índice físico que `small` (recuperação no granularidade
+      fina + texto completo da passagem na geração).
+    """
+    d = dominio if dominio is not None else DOMINIO_ATUAL
+    if strategy == "legacy" or strategy == "":
+        return f"db_local_bge_{d}"
+    if strategy == "multiscale":
+        return f"db_local_bge_{d}_small"
+    return f"db_local_bge_{d}_{strategy}"
 
 
 def _ficheiro_passage(dominio: str) -> str:
