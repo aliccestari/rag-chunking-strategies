@@ -1,9 +1,15 @@
 .env
+.venv/
 __pycache__/
 *.py[cod]
 *$py.class
 .DS_Store
-
-# Chroma / índices vetoriais locais (recriar com o pipeline, não versionar)
-tcc_implementation/db/
 tcc_implementation/db_local_*/
+tcc_implementation/preds_*.jsonl
+tcc_implementation/eval_b_*.jsonl
+tcc_implementation/*backup*.jsonl
+tcc_implementation/timings_*.csv
+semeval/corpora/document_level/*.jsonl
+semeval/corpora/passage_level/*.jsonl
+semeval/corpora/document_level/zip/
+semeval/corpora/passage_level/zip/
