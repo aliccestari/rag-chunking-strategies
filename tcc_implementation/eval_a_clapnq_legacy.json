@@ -1,0 +1,15 @@
+{
+  "dominio": "clapnq",
+  "collection": "mt-rag-clapnq-elser-512-100-20240503",
+  "num_queries_eval": 208,
+  "averages": {
+    "NDCG@1": 0.33654,
+    "NDCG@3": 0.32699,
+    "NDCG@5": 0.34721,
+    "NDCG@10": 0.39591,
+    "Recall@1": 0.14348,
+    "Recall@3": 0.30594,
+    "Recall@5": 0.37445,
+    "Recall@10": 0.48884
+  }
+}

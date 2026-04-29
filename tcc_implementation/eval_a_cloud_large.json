@@ -1,0 +1,15 @@
+{
+  "dominio": "cloud",
+  "collection": "mt-rag-ibmcloud-elser-512-100-20240502",
+  "num_queries_eval": 188,
+  "averages": {
+    "NDCG@1": 0.23404,
+    "NDCG@3": 0.2058,
+    "NDCG@5": 0.22913,
+    "NDCG@10": 0.26157,
+    "Recall@1": 0.11534,
+    "Recall@3": 0.19447,
+    "Recall@5": 0.24966,
+    "Recall@10": 0.32625
+  }
+}

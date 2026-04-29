@@ -7,9 +7,7 @@ from ragas import evaluate, RunConfig
 from ragas.metrics import faithfulness, answer_relevancy, context_precision, context_recall
 from judge_utils import *
 
-from langchain.chat_models import AzureChatOpenAI
-from langchain.embeddings.openai import OpenAIEmbeddings
-from langchain_openai.embeddings import AzureOpenAIEmbeddings
+from langchain_openai import AzureChatOpenAI, AzureOpenAIEmbeddings, ChatOpenAI, OpenAIEmbeddings
 
 from huggingface_client import HuggingFaceLLMClient
 from azure_openai_client import AzureOpenAIClient
@@ -17,19 +15,19 @@ from azure_openai_client import AzureOpenAIClient
 
 from datasets import Dataset
 from typing import List, Optional, Any
-from transformers import AutoModelForCausalLM, AutoTokenizer, GenerationConfig
-from langchain.callbacks.manager import CallbackManagerForLLMRun
+from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer, GenerationConfig
+from langchain_core.callbacks.manager import CallbackManagerForLLMRun
 from ragas.metrics import faithfulness, context_recall, context_precision, answer_relevancy
 from ragas import evaluate
 from ragas.llms import LangchainLLMWrapper
 from ragas.run_config import RunConfig
-from langchain.llms.base import LLM
+from langchain_core.language_models.llms import LLM
+from pydantic import PrivateAttr
 import warnings
 warnings.filterwarnings('ignore')
 
 import torch
 import gc
-from langchain_openai import ChatOpenAI
 
 def clear_cuda():
     gc.collect()
@@ -52,21 +50,46 @@ def load_chat_openai_llm(judge_model, max_new_tokens = None):
 # Local LLM class for running RAGAS locally
 # ================================================
 class LocalLLM(LLM):
-    tokenizer: AutoTokenizer = None
-    model: AutoModelForCausalLM = None
+    model_name: str
+    _tokenizer: Any = PrivateAttr(default=None)
+    _model: Any = PrivateAttr(default=None)
 
     def __init__(self, mode_name_or_path: str):
-        super().__init__()
-        self.tokenizer = AutoTokenizer.from_pretrained(mode_name_or_path)
-        
-        if self.tokenizer.pad_token_id is None:
-            self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
+        super().__init__(model_name=mode_name_or_path)
 
-        self.model = AutoModelForCausalLM.from_pretrained(mode_name_or_path,attn_implementation="flash_attention_2", device_map="auto",  torch_dtype="bfloat16", 
-                                                            load_in_4bit=True,
-                                                            bnb_4bit_compute_dtype=torch.bfloat16,
-                                                          )
-        self.model.generation_config = GenerationConfig.from_pretrained(mode_name_or_path)
+        try:
+            config = AutoConfig.from_pretrained(mode_name_or_path, trust_remote_code=False)
+            trust_remote_code = False
+        except Exception:
+            config = AutoConfig.from_pretrained(mode_name_or_path, trust_remote_code=True)
+            trust_remote_code = True
+
+        self._tokenizer = AutoTokenizer.from_pretrained(
+            mode_name_or_path,
+            trust_remote_code=trust_remote_code,
+        )
+        
+        if self._tokenizer.pad_token_id is None:
+            self._tokenizer.pad_token_id = self._tokenizer.eos_token_id
+
+        load_kw = dict(
+            config=config,
+            trust_remote_code=trust_remote_code,
+            device_map="auto",
+            torch_dtype=torch.float16,
+            attn_implementation="eager",
+        )
+        try:
+            self._model = AutoModelForCausalLM.from_pretrained(mode_name_or_path, **load_kw)
+        except TypeError:
+            load_kw.pop("attn_implementation", None)
+            self._model = AutoModelForCausalLM.from_pretrained(mode_name_or_path, **load_kw)
+        try:
+            self._model.generation_config = GenerationConfig.from_pretrained(mode_name_or_path)
+        except Exception:
+            pass
+        self._model.generation_config.do_sample = False
+        self._model.eval()
 
     def _call(
             self,
@@ -76,20 +99,28 @@ class LocalLLM(LLM):
             **kwargs: Any,
     ) -> str:
         messages = [{"role": "user", "content": prompt}]
-        input_ids = self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-        model_inputs = self.tokenizer([input_ids], return_tensors="pt").to(self.model.device)
-        generated_ids = self.model.generate(model_inputs.input_ids, 
-                                            max_new_tokens=2048, 
-                                            attention_mask= model_inputs["attention_mask"], pad_token_id=self.tokenizer.pad_token_id)
+        input_ids = self._tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+        device = next(self._model.parameters()).device
+        model_inputs = self._tokenizer([input_ids], return_tensors="pt").to(device)
+        generated_ids = self._model.generate(
+                                            model_inputs.input_ids,
+                                            max_new_tokens=256,
+                                            do_sample=False,
+                                            attention_mask=model_inputs["attention_mask"],
+                                            pad_token_id=self._tokenizer.pad_token_id)
         
         # generated_ids = [output_ids[len(input_ids):] for input_ids, output_ids in zip(model_inputs.input_ids, generated_ids)]
         # response = self.tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
         
         input_length = model_inputs["input_ids"].shape[1]
         new_tokens = generated_ids[:, input_length:]
-        response = self.tokenizer.batch_decode(new_tokens, skip_special_tokens=True)[0]
+        response = self._tokenizer.batch_decode(new_tokens, skip_special_tokens=True)[0]
         
         return response
+
+    @property
+    def _identifying_params(self):
+        return {"model_name": self.model_name}
 
     @property
     def _llm_type(self):
@@ -326,21 +357,26 @@ def run_idk_judge(provider, model_name, input_file, output_file):
     response_lst = []
     for cur_prompt in tqdm(formatted_conversations):
         if provider == "openai" or provider == "hf":
-            response = client.generate_response(cur_prompt)
-            # response = client.generate_response(cur_prompt, max_new_tokens = 3)
+            response = client.generate_response(cur_prompt, max_new_tokens=8)
         else:
             response_obj = llm_model(cur_prompt)
             response = response_obj.content
         # print("IDK Model Response:", response)
         response_lst.append(response)
             
-    model_predictions['idk_eval'] = response_lst
-    model_predictions["idk_eval"] = model_predictions["idk_eval"].apply(first_token_idk)
+    model_predictions['idk_eval_raw'] = response_lst
+    model_predictions["idk_eval"] = model_predictions["idk_eval_raw"].apply(first_token_idk)
+    model_predictions["idk_eval"] = model_predictions.apply(
+        lambda row: heuristic_idk_from_response(row["response"])
+        if row["idk_eval"] == "unknown"
+        else row["idk_eval"],
+        axis=1,
+    )
 
     if 'metrics' not in model_predictions:
             model_predictions['metrics'] = None
 
     model_predictions['metrics'] = model_predictions.apply(lambda row: update_or_create_dict(row.get('metrics'), row['idk_eval'], 'idk_eval'), axis=1)
     
-    model_predictions = remove_keys_from_df(model_predictions, ["inquiry", "response", "idk_eval"])
+    model_predictions = remove_keys_from_df(model_predictions, ["inquiry", "response", "idk_eval", "idk_eval_raw"])
     model_predictions.to_json(output_file, orient="records", lines=True)

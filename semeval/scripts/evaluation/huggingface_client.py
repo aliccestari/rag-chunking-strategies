@@ -1,32 +1,94 @@
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
 import time
+
+
+def _patch_config_rope_scaling(config) -> None:
+    """Legacy hub modeling_phi3 only understands rope_scaling=None or longrope (see trust_remote_code path)."""
+    rs = getattr(config, "rope_scaling", None)
+    if not isinstance(rs, dict) or not rs:
+        return
+    stype = rs.get("type") or rs.get("rope_type")
+    if stype in (None, "default"):
+        config.rope_scaling = None
+        return
+    if "type" not in rs and "rope_type" in rs:
+        config.rope_scaling = {**rs, "type": rs["rope_type"]}
+
 
 class HuggingFaceLLMClient:
     def __init__(self, model_name, model_dir=None, use_4bit=False):
-        
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name, cache_dir=model_dir, trust_remote_code=True)
 
-        self.model = AutoModelForCausalLM.from_pretrained(model_name, 
-                                                          cache_dir=model_dir,
-                                                          torch_dtype=torch.float16,
-                                                          device_map="auto",
-                                                          load_in_4bit=True,
-                                                          )
+        # Prefer the model implementation bundled with the installed transformers.
+        # Remote model code can lag the library API (e.g. Phi-3 DynamicCache changes).
+        try:
+            config = AutoConfig.from_pretrained(
+                model_name, cache_dir=model_dir, trust_remote_code=False
+            )
+            trust_remote_code = False
+        except Exception:
+            trust_remote_code = True
+            config = AutoConfig.from_pretrained(
+                model_name, cache_dir=model_dir, trust_remote_code=True
+            )
+
+        if trust_remote_code and getattr(config, "model_type", None) == "phi3":
+            _patch_config_rope_scaling(config)
+
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            model_name, cache_dir=model_dir, trust_remote_code=trust_remote_code
+        )
+
+        load_kw = dict(
+            config=config,
+            cache_dir=model_dir,
+            trust_remote_code=trust_remote_code,
+            device_map="auto",
+            torch_dtype=torch.float16,
+            attn_implementation="eager",
+        )
+        # Never pass load_in_4bit= directly: some architectures (e.g. Granite) then
+        # receive it in model __init__ and crash. Use BitsAndBytesConfig when needed.
+        if use_4bit:
+            try:
+                from transformers import BitsAndBytesConfig
+
+                load_kw["quantization_config"] = BitsAndBytesConfig(
+                    load_in_4bit=True,
+                    bnb_4bit_compute_dtype=torch.float16,
+                )
+            except ImportError:
+                pass
+
+        try:
+            self.model = AutoModelForCausalLM.from_pretrained(model_name, **load_kw)
+        except TypeError:
+            load_kw.pop("attn_implementation", None)
+            self.model = AutoModelForCausalLM.from_pretrained(model_name, **load_kw)
         self.model.eval()
 
     def generate_response(self, user_input, max_new_tokens=1024, temperature=0, top_p=1):
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        device = next(self.model.parameters()).device
         _params = {
-            "temperature": temperature,
-            "top_p": top_p,
             "max_new_tokens": max_new_tokens,
             "do_sample": False 
         }
+        if _params["do_sample"]:
+            _params["temperature"] = temperature
+            _params["top_p"] = top_p
         
         prompt = user_input
 
-        inputs = self.tokenizer(prompt, return_tensors="pt").to(device)
+        if getattr(self.tokenizer, "chat_template", None):
+            inputs = self.tokenizer.apply_chat_template(
+                [{"role": "user", "content": prompt}],
+                tokenize=True,
+                add_generation_prompt=True,
+                return_tensors="pt",
+                return_dict=True,
+            ).to(device)
+        else:
+            inputs = self.tokenizer(prompt, return_tensors="pt").to(device)
         input_length = inputs["input_ids"].shape[1]
 
         with torch.no_grad():

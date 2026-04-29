@@ -20,13 +20,17 @@ Exemplos com pasta manual:
 
   python run_mtrag.py task-a --domain govt --queries lastturn --index-dir db_local_bge_govt -o preds_govt_a.jsonl
 
-  python run_mtrag.py eval-a --domain govt --predictions preds_govt_a.jsonl
+  python run_mtrag.py eval-a --domain govt --predictions preds_govt_a.jsonl -o metrics_govt_a.json
 
   python run_mtrag.py task-b --domain govt --queries lastturn -o preds_govt_b.jsonl
 
 Avaliação oficial (formato SemEval):
   python run_mtrag.py format-check --task c --domain govt --predictions preds_govt_c.jsonl
   python run_mtrag.py gen-eval --predictions preds_govt_b.jsonl -o eval_b.jsonl --provider hf \\
+ --judge-model ibm-granite/granite-3.3-8b-instruct
+
+  # Retomar só juízes LLM (ficheiro já tem métricas DeBERTa/ROUGE; não repetir ~20 min/domínio):
+  python run_mtrag.py gen-eval --predictions eval_b.jsonl -o eval_b.jsonl --skip-algorithmic --provider hf \\
  --judge-model ibm-granite/granite-3.3-8b-instruct
 
 gen-eval precisa das dependências em semeval/scripts/evaluation/requirements.txt (ideal: venv à parte).
@@ -343,7 +347,14 @@ def cmd_task_c(args: argparse.Namespace) -> None:
 def cmd_eval_a(args: argparse.Namespace) -> None:
     t0 = time.perf_counter()
     res = eval_predictions_file(Path(args.predictions), args.domain)
-    print(json.dumps({k: v for k, v in res.items() if k != "per_query"}, indent=2))
+    out_obj = {k: v for k, v in res.items() if k != "per_query"}
+    text = json.dumps(out_obj, indent=2)
+    out_path = getattr(args, "output", None)
+    if out_path:
+        Path(out_path).write_text(text + "\n", encoding="utf-8")
+        print(f"Métricas gravadas em: {out_path}", flush=True)
+    else:
+        print(text)
     print(f"(eval-a: {_duracao_humana(time.perf_counter() - t0)})", flush=True)
 
 
@@ -407,6 +418,15 @@ def _carregar_referencia_por_task_id(caminho: Path) -> dict[str, dict]:
             o = json.loads(line)
             ref[str(o["task_id"])] = o
     return ref
+
+
+def _count_nonempty_jsonl_lines(caminho: Path) -> int:
+    n = 0
+    with caminho.open(encoding="utf-8") as f:
+        for line in f:
+            if line.strip():
+                n += 1
+    return n
 
 
 def merge_predictions_com_reference(
@@ -508,6 +528,21 @@ def cmd_gen_eval(args: argparse.Namespace) -> None:
             sys.exit(1)
         cmd += ["--judge_model", args.judge_model]
 
+    if getattr(args, "skip_algorithmic", False):
+        cmd.append("--skip-algorithmic")
+    if getattr(args, "only_idk", False):
+        cmd.append("--only-idk")
+
+    n_linhas = _count_nonempty_jsonl_lines(pred)
+    orig = Path(args.predictions).resolve()
+    if merged_tmp is not None:
+        print(
+            f"Predições: {orig} (merge + reference) → {n_linhas} linhas JSONL na entrada do eval.",
+            flush=True,
+        )
+    else:
+        print(f"Predições: {orig} → {n_linhas} linhas JSONL na entrada do eval.", flush=True)
+
     print("Avaliação de geração (pode demorar horas e exige RAM/GPU para o juiz HF)...", flush=True)
     print(" ".join(cmd), flush=True)
     try:
@@ -600,6 +635,13 @@ def main() -> None:
     pe = sub.add_parser("eval-a", help="Recall@k / nDCG@k para arquivo Task A (k=1,3,5,10)")
     pe.add_argument("--domain", required=True, choices=["govt", "fiqa", "cloud", "clapnq"])
     pe.add_argument("--predictions", required=True)
+    pe.add_argument(
+        "-o",
+        "--output",
+        default=None,
+        metavar="JSON",
+        help="Gravar métricas agregadas em JSON válido (sem per-query; ~alguns KiB)",
+    )
     pe.set_defaults(func=cmd_eval_a)
 
     pf = sub.add_parser(
@@ -647,6 +689,16 @@ def main() -> None:
     )
     pg.add_argument("--openai-key", dest="openai_key", default=None)
     pg.add_argument("--azure-host", dest="azure_host", default=None)
+    pg.add_argument(
+        "--skip-algorithmic",
+        action="store_true",
+        help="Só juízes LLM (IDK, RAGAS, RadBench): não repetir métricas DeBERTa/ROUGE/etc.",
+    )
+    pg.add_argument(
+        "--only-idk",
+        action="store_true",
+        help="Roda só o juiz IDK rápido; não roda RAGAS/RadBench nem métricas condicionadas.",
+    )
     pg.set_defaults(func=cmd_gen_eval)
 
     args = p.parse_args()

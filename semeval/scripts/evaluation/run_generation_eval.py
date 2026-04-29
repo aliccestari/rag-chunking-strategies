@@ -1,5 +1,9 @@
 import argparse
+import json
 import os
+import shutil
+from pathlib import Path
+
 from judge_wrapper import *
 from run_algorithmic import run_algorithmic_judges
 
@@ -53,13 +57,47 @@ def args_parser():
         type=str, 
         help="OpenAI endpoint (required if provider=openai)"
     )
+    parser.add_argument(
+        "--skip-algorithmic",
+        action="store_true",
+        dest="skip_algorithmic",
+        help=(
+            "Do not run DeBERTa/ROUGE/BERTScore/etc. Use -i as JSONL that already has "
+            "algorithmic metrics; only run IDK, RAGAS, RadBench, and IDK-conditioned metrics. "
+            "If -o differs from -i, -i is copied to -o first."
+        ),
+    )
+    parser.add_argument(
+        "--only-idk",
+        action="store_true",
+        dest="only_idk",
+        help="Only run/resume the fast IDK judge. Do not run RAGAS, RadBench, or IDK-conditioned metrics.",
+    )
     return parser
+
+
+def jsonl_has_metric(path: str, metric_name: str) -> bool:
+    seen = False
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            if not line.strip():
+                continue
+            seen = True
+            metrics = json.loads(line).get("metrics") or {}
+            if metric_name not in metrics:
+                return False
+    return seen
 
 if __name__ == "__main__":
     parser = args_parser()
     args = parser.parse_args()
-    
-    run_algorithmic_judges(args.evaluators, args.input, args.output)
+
+    if args.skip_algorithmic:
+        in_path, out_path = Path(args.input).resolve(), Path(args.output).resolve()
+        if in_path != out_path:
+            shutil.copyfile(in_path, out_path)
+    else:
+        run_algorithmic_judges(args.evaluators, args.input, args.output)
     
     if args.provider == "openai":
         if not args.openai_key or not args.azure_host:
@@ -75,15 +113,25 @@ if __name__ == "__main__":
     
     
     if args.provider == "openai":
-        run_idk_judge(args.provider, "", args.output, args.output)
-        run_ragas_judges_openai(args.output, args.output, args.openai_key, args.azure_host)
-        run_radbench_judge(args.provider, "", args.output, args.output)
+        if not jsonl_has_metric(args.output, "idk_eval"):
+            run_idk_judge(args.provider, "", args.output, args.output)
+        if args.only_idk:
+            raise SystemExit(0)
+        if not jsonl_has_metric(args.output, "RL_F"):
+            run_ragas_judges_openai(args.output, args.output, args.openai_key, args.azure_host)
+        if not jsonl_has_metric(args.output, "RB_llm"):
+            run_radbench_judge(args.provider, "", args.output, args.output)
         
         get_idk_conditioned_metrics(args.output, args.output)
     else:
-        run_idk_judge(args.provider, args.judge_model, args.output, args.output)
+        if not jsonl_has_metric(args.output, "idk_eval"):
+            run_idk_judge(args.provider, args.judge_model, args.output, args.output)
+        if args.only_idk:
+            raise SystemExit(0)
         
-        run_ragas_judges_local(args.provider, judge_model, args.output, args.output)
-        run_radbench_judge(args.provider, judge_model, args.output, args.output)
+        if not jsonl_has_metric(args.output, "RL_F"):
+            run_ragas_judges_local(args.provider, judge_model, args.output, args.output)
+        if not jsonl_has_metric(args.output, "RB_llm"):
+            run_radbench_judge(args.provider, judge_model, args.output, args.output)
         
         get_idk_conditioned_metrics(args.output, args.output)

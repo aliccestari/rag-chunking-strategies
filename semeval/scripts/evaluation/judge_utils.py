@@ -154,14 +154,88 @@ def extract_rating(text):
 def first_token_idk(text: str) -> str:
     if not isinstance(text, str):
         return None
-    match = re.match(r"\s*([A-Za-z]+)", text)
-    if not match: return "unknown"
-    token = match.group(1).lower()
-    # return token if token in {"yes", "no", "partial"} else "unknown"
-    
-    if token == "yes": return 1
-    elif token == "no": return 0
-    else: return 0.5
+    normalized = text.strip().lower()
+    if not normalized:
+        return "unknown"
+
+    # Prefer an explicit label anywhere in the short generation. Qwen sometimes
+    # adds punctuation or repeats "[Output]" before the label.
+    match = re.search(r"\b(yes|no|partial)\b", normalized)
+    if match:
+        token = match.group(1)
+        if token == "yes":
+            return 1
+        if token == "no":
+            return 0
+        return 0.5
+
+    # Fallback for verbose generations that ignore the label-only instruction.
+    idk_markers = [
+        "cannot answer",
+        "can't answer",
+        "can not answer",
+        "do not have enough information",
+        "don't have enough information",
+        "not enough information",
+        "insufficient information",
+        "no sufficient information",
+        "cannot be answered",
+        "unable to answer",
+        "i don't know",
+        "i do not know",
+    ]
+    if any(marker in normalized for marker in idk_markers):
+        return 1
+    return "unknown"
+
+
+def heuristic_idk_from_response(text: str):
+    """Fallback IDK detector for model outputs when the LLM judge returns an unparsable label."""
+    if not isinstance(text, str):
+        return "unknown"
+    normalized = text.strip().lower()
+    if not normalized:
+        return "unknown"
+
+    idk_markers = [
+        "cannot answer",
+        "can't answer",
+        "can not answer",
+        "could not answer",
+        "do not have enough information",
+        "don't have enough information",
+        "not enough information",
+        "insufficient information",
+        "no sufficient information",
+        "cannot be answered",
+        "unable to answer",
+        "unable to provide",
+        "i don't know",
+        "i do not know",
+        "i cannot",
+        "i can't",
+        "i am sorry",
+        "i'm sorry",
+        "does not provide",
+        "doesn't provide",
+        "does not mention",
+        "doesn't mention",
+        "not mentioned",
+        "not specified",
+        "not available",
+        "not contain",
+        "no information",
+        "no reference",
+    ]
+    has_idk = any(marker in normalized for marker in idk_markers)
+    if not has_idk:
+        return 0
+
+    # If it refuses part of the question but still gives a substantive answer, mark partial.
+    continuation_markers = [" however", " but ", " based on ", " it mentions ", " according to "]
+    if any(marker in normalized for marker in continuation_markers) and len(normalized.split()) > 25:
+        return 0.5
+    return 1
 
 
 def format_idk_judge(df):
@@ -329,6 +403,9 @@ no
 
 [Response]
 {response}
+
+Return exactly one lowercase label: yes, no, or partial.
+Do not explain. Do not add punctuation.
 
 [Output]
 """

@@ -1,0 +1,15 @@
+{
+  "dominio": "fiqa",
+  "collection": "mt-rag-fiqa-beir-elser-512-100-20240501",
+  "num_queries_eval": 180,
+  "averages": {
+    "NDCG@1": 0.22778,
+    "NDCG@3": 0.19737,
+    "NDCG@5": 0.20355,
+    "NDCG@10": 0.23426,
+    "Recall@1": 0.09728,
+    "Recall@3": 0.17829,
+    "Recall@5": 0.20496,
+    "Recall@10": 0.27714
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "dominio": "govt",
+  "collection": "mt-rag-govt-elser-512-100-20240611",
+  "num_queries_eval": 201,
+  "averages": {
+    "NDCG@1": 0.23881,
+    "NDCG@3": 0.19874,
+    "NDCG@5": 0.22848,
+    "NDCG@10": 0.268,
+    "Recall@1": 0.10445,
+    "Recall@3": 0.18098,
+    "Recall@5": 0.24732,
+    "Recall@10": 0.34799
+  }
+}

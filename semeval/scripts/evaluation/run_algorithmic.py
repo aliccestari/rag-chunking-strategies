@@ -26,6 +26,28 @@ import re
 import string
 from bs4 import BeautifulSoup
 
+import bert_score.utils as _bert_score_utils
+
+_orig_sent_encode = _bert_score_utils.sent_encode
+
+
+def _sent_encode_overflow_safe(tokenizer, sent):
+    """
+    bert_score passa max_length=model_max_length ao tokenizer; em Transformers 5.x isso pode ser
+    um sentinel enorme e gerar OverflowError no tokenizer Rust (Python 3.14).
+    """
+    try:
+        mm = getattr(tokenizer, "model_max_length", 512)
+        mm = int(mm)
+        if mm <= 0 or mm > 1024:
+            tokenizer.model_max_length = 512
+    except (TypeError, ValueError, OverflowError):
+        tokenizer.model_max_length = 512
+    return _orig_sent_encode(tokenizer, sent)
+
+
+_bert_score_utils.sent_encode = _sent_encode_overflow_safe
+
 class LABELS:
     ANSWERABLE = "ANSWERABLE"
     UNANSWERABLE = "UNANSWERABLE"
@@ -54,6 +76,22 @@ def clean_html(text: str) -> str:
 def strip_newline_words(text: str) -> str:
     text = text.replace("\n", " ")
     return re.sub(r"[^\w\s]", "", text).lower()
+
+# DeBERTa (BERTScore) usa ~512 tokens; textos MTRAG podem ser enormes e, com
+# tokenizers Rust + Python 3.14, causam OverflowError em enable_truncation.
+_BERTSTYLE_MAX_CHARS = 8000
+
+
+def _truncate_for_metric(text, max_chars: int = _BERTSTYLE_MAX_CHARS) -> str:
+    if text is None:
+        return ""
+    if not isinstance(text, str):
+        text = str(text)
+    text = text.strip()
+    if len(text) <= max_chars:
+        return text
+    return text[:max_chars]
+
 
 # ================================================
 #                Third Party scorers
@@ -89,6 +127,8 @@ def recall(prediction: str, target: str, *args, **kwargs) -> float:
 
 
 def rouge_l(prediction: str, target: str, *args, use_stemmer=False, **kwargs) -> float:
+    prediction = _truncate_for_metric(prediction)
+    target = _truncate_for_metric(target)
     return rouge_evaluator.compute(
         predictions=[prediction],
         references=[target],
@@ -105,6 +145,8 @@ def bertscore(
     lang: str = "en",
     **kwargs,
 ) -> Tuple[float, float, float]:
+    prediction = _truncate_for_metric(prediction)
+    target = _truncate_for_metric(target)
 
     score = bertscore_metric.compute(
         predictions=[prediction],
