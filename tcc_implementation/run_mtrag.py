@@ -49,20 +49,20 @@ import time
 from pathlib import Path
 
 from corpus_config import (
+    COLLECTION_NAME,
     RAIZ_REPO,
     caminho_corpus_passage,
+    caminho_generation_reference,
     caminho_queries_jsonl,
-    caminho_qrels_dev,
     pasta_indice_chroma,
 )
 from mtrag_subtasks import (
     carregar_mapa_passagens,
-    carregar_qrels_por_query,
     indice_para_dominio,
     iter_linhas_queries,
     num_turnos_utilizador,
     task_a_um_turno,
-    task_b_um_turno,
+    task_b_reference_um_turno,
     task_c_sem_rag_um_turno,
     task_c_um_turno,
 )
@@ -219,32 +219,33 @@ def cmd_task_a(args: argparse.Namespace) -> None:
 
 def cmd_task_b(args: argparse.Namespace) -> None:
     t0_all = time.perf_counter()
-    caminho_q = caminho_queries_jsonl(args.domain, args.queries)
-    total = _total_jobs(_contar_linhas_jsonl_nao_vazias(caminho_q), args.limit)
-    qrels = carregar_qrels_por_query(caminho_qrels_dev(args.domain))
-    corpus = caminho_corpus_passage(args.domain)
-    print("Task B: a ler corpus passage_level para RAM (pode demorar um pouco)…", flush=True)
-    t0_mapa = time.perf_counter()
-    mapa = carregar_mapa_passagens(corpus)
-    dt_mapa = time.perf_counter() - t0_mapa
+    ref_path = caminho_generation_reference()
+    collection = COLLECTION_NAME[args.domain]
+    registros = []
+    with ref_path.open(encoding="utf-8") as f:
+        for line in f:
+            if not line.strip():
+                continue
+            reg = json.loads(line)
+            if reg.get("Collection") == collection:
+                registros.append(reg)
+    total = _total_jobs(len(registros), args.limit)
     print(
-        f"Task B: {len(mapa)} passagens em memória ({_duracao_humana(dt_mapa)}). A gerar respostas…",
+        f"Task B: {len(registros)} tarefas oficiais em {ref_path.name} para {args.domain}. "
+        "A gerar respostas…",
         flush=True,
     )
     out = Path(args.output)
     n = 0
     t0_loop = time.perf_counter()
     with out.open("w", encoding="utf-8") as sink:
-        for task_id, texto in iter_linhas_queries(caminho_q):
+        for reg_in in registros:
             if args.limit is not None and n >= args.limit:
                 break
-            reg = task_b_um_turno(
-                task_id,
-                texto,
-                qrels,
-                mapa,
+            reg = task_b_reference_um_turno(
+                reg_in,
                 max_new_tokens=args.max_new_tokens,
-                max_contexts=args.max_contexts,
+                max_context_chars=args.max_context_chars,
             )
             sink.write(json.dumps(reg, ensure_ascii=False) + "\n")
             n += 1
@@ -252,7 +253,7 @@ def cmd_task_b(args: argparse.Namespace) -> None:
     dt_loop = time.perf_counter() - t0_loop
     dt_all = time.perf_counter() - t0_all
     print(
-        f"Task B: {n} linhas -> {out} (loop {_duracao_humana(dt_loop)}, total c/ leitura corpus {_duracao_humana(dt_all)})",
+        f"Task B: {n} linhas -> {out} (loop {_duracao_humana(dt_loop)}, total {_duracao_humana(dt_all)})",
         flush=True,
     )
 
@@ -314,6 +315,7 @@ def cmd_task_c(args: argparse.Namespace) -> None:
                         candidatos=args.candidatos,
                         mapa_passagens=mapa,
                         expandir_passagem_completa=expand,
+                        max_context_chars=args.max_context_chars,
                     )
                     dt = time.perf_counter() - t0_turn
                     if tw:
@@ -362,7 +364,7 @@ _FORMAT_CHECK_MODE = {"a": "retrieval_taska", "b": "generation_taskb", "c": "rag
 
 
 def cmd_format_check(args: argparse.Namespace) -> None:
-    """Chama semeval/scripts/evaluation/format_checker.py com stub de task_id (queries BEIR usam _id)."""
+    """Chama format_checker.py com stub de task_id no mesmo universo da tarefa."""
     from mtrag_subtasks import iter_linhas_queries
 
     script = RAIZ_REPO / "semeval/scripts/evaluation/format_checker.py"
@@ -370,7 +372,6 @@ def cmd_format_check(args: argparse.Namespace) -> None:
         sys.stderr.write(f"Script não encontrado: {script}\n")
         sys.exit(1)
 
-    qpath = caminho_queries_jsonl(args.domain, args.queries)
     mode = _FORMAT_CHECK_MODE[args.task]
     pred = Path(args.predictions).resolve()
 
@@ -382,11 +383,26 @@ def cmd_format_check(args: argparse.Namespace) -> None:
     ) as tmp:
         stub_path = Path(tmp.name)
         n = 0
-        for tid, _ in iter_linhas_queries(qpath):
-            if args.limit is not None and n >= args.limit:
-                break
-            tmp.write(json.dumps({"task_id": tid}) + "\n")
-            n += 1
+        if args.task == "b":
+            collection = COLLECTION_NAME[args.domain]
+            with caminho_generation_reference().open(encoding="utf-8") as ref:
+                for line in ref:
+                    if args.limit is not None and n >= args.limit:
+                        break
+                    if not line.strip():
+                        continue
+                    reg = json.loads(line)
+                    if reg.get("Collection") != collection:
+                        continue
+                    tmp.write(json.dumps({"task_id": reg["task_id"]}) + "\n")
+                    n += 1
+        else:
+            qpath = caminho_queries_jsonl(args.domain, args.queries)
+            for tid, _ in iter_linhas_queries(qpath):
+                if args.limit is not None and n >= args.limit:
+                    break
+                tmp.write(json.dumps({"task_id": tid}) + "\n")
+                n += 1
 
     try:
         r = subprocess.run(
@@ -598,7 +614,12 @@ def main() -> None:
     pb.add_argument("--queries", default="lastturn", choices=["lastturn", "rewrite", "questions"])
     pb.add_argument("-o", "--output", required=True)
     pb.add_argument("--max-new-tokens", type=int, default=512)
-    pb.add_argument("--max-contexts", type=int, default=10)
+    pb.add_argument(
+        "--max-context-chars",
+        type=int,
+        default=None,
+        help="Limita cada contexto a N caracteres antes da geração (útil para Llama local).",
+    )
     pb.add_argument("--limit", type=int, default=None)
     pb.set_defaults(func=cmd_task_b)
 
@@ -629,6 +650,12 @@ def main() -> None:
     pc.add_argument("--candidatos", type=int, default=40)
     pc.add_argument("--limiar", type=float, default=0.0)
     pc.add_argument("--max-new-tokens", type=int, default=512)
+    pc.add_argument(
+        "--max-context-chars",
+        type=int,
+        default=None,
+        help="Limita cada contexto a N caracteres antes da geração (útil para Llama local).",
+    )
     pc.add_argument("--limit", type=int, default=None)
     pc.set_defaults(func=cmd_task_c)
 

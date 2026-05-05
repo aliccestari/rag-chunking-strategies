@@ -9,6 +9,11 @@ tcc_implementation/preds_*.jsonl
 tcc_implementation/eval_b_*.jsonl
 tcc_implementation/*backup*.jsonl
 tcc_implementation/timings_*.csv
+tcc_implementation/results/**/preds_*.jsonl
+tcc_implementation/results/**/eval_b_*.jsonl
+tcc_implementation/results/**/eval_c_*.jsonl
+tcc_implementation/results/**/*backup*.jsonl
+tcc_implementation/results/**/timings_*.csv
 semeval/corpora/document_level/*.jsonl
 semeval/corpora/document_level/*.zip
 semeval/corpora/passage_level/*.jsonl

@@ -96,6 +96,39 @@ def montar_prompt_rag(historico: str, pergunta: str, contextos: list[dict]) -> s
     )
 
 
+def historico_e_pergunta_de_input(mensagens: list[dict]) -> tuple[str, str]:
+    """Extrai histórico e pergunta atual preservando turnos user/agent oficiais."""
+    if not mensagens:
+        return "N/A (sem turnos parseados).", ""
+    pergunta = str(mensagens[-1].get("text", ""))
+    if len(mensagens) == 1:
+        return "N/A (primeiro turno).", pergunta
+    linhas = []
+    for msg in mensagens[:-1]:
+        speaker = str(msg.get("speaker", "user")).lower()
+        rotulo = "Assistant" if speaker in ("agent", "assistant") else "User"
+        linhas.append(f"{rotulo}: {msg.get('text', '')}")
+    return "\n".join(linhas), pergunta
+
+
+def limitar_contextos(
+    contextos: list[dict],
+    max_chars_por_contexto: int | None = None,
+) -> list[dict]:
+    """Limita textos muito longos antes da geração, preservando IDs/scores."""
+    if not max_chars_por_contexto or max_chars_por_contexto <= 0:
+        return contextos
+    limite = max_chars_por_contexto
+    cortados: list[dict] = []
+    for c in contextos:
+        item = dict(c)
+        texto = str(item.get("text", ""))
+        if len(texto) > limite:
+            item["text"] = texto[:limite].rstrip() + "\n[truncated]"
+        cortados.append(item)
+    return cortados
+
+
 def task_a_um_turno(
     db: Chroma,
     dominio: str,
@@ -136,6 +169,7 @@ def contexts_ouro(
     qrels_por_query: dict[str, list[str]],
     mapa_passagens: dict[str, dict],
     max_contexts: int = 10,
+    max_context_chars: int | None = None,
 ) -> list[dict]:
     ids = qrels_por_query.get(task_id, [])[:max_contexts]
     ctx: list[dict] = []
@@ -147,7 +181,7 @@ def contexts_ouro(
         if info.get("title"):
             item["title"] = info["title"]
         ctx.append(item)
-    return ctx
+    return limitar_contextos(ctx, max_context_chars)
 
 
 def task_b_um_turno(
@@ -157,10 +191,17 @@ def task_b_um_turno(
     mapa_passagens: dict[str, dict],
     max_new_tokens: int = 512,
     max_contexts: int = 10,
+    max_context_chars: int | None = None,
 ) -> dict:
     mensagens = texto_para_mensagens(texto_query)
     historico, pergunta = historico_e_pergunta_atual(mensagens)
-    ctx = contexts_ouro(task_id, qrels_por_query, mapa_passagens, max_contexts=max_contexts)
+    ctx = contexts_ouro(
+        task_id,
+        qrels_por_query,
+        mapa_passagens,
+        max_contexts=max_contexts,
+        max_context_chars=max_context_chars,
+    )
     prompt = montar_prompt_rag(historico, pergunta, ctx)
     from local_llm import gerar_texto
 
@@ -171,6 +212,32 @@ def task_b_um_turno(
         "contexts": ctx,
         "predictions": [{"text": resposta}],
     }
+
+
+def task_b_reference_um_turno(
+    registro: dict,
+    max_new_tokens: int = 512,
+    max_context_chars: int | None = None,
+) -> dict:
+    """Subtask B oficial: geração usando os contextos de reference.jsonl."""
+    mensagens = list(registro.get("input") or [])
+    ctx = limitar_contextos(list(registro.get("contexts") or []), max_context_chars)
+    historico, pergunta = historico_e_pergunta_de_input(mensagens)
+    prompt = montar_prompt_rag(historico, pergunta, ctx)
+    from local_llm import gerar_texto
+
+    resposta = gerar_texto(prompt, max_new_tokens=max_new_tokens)
+    saida = {
+        "task_id": registro["task_id"],
+        "input": mensagens,
+        "contexts": ctx,
+        "predictions": [{"text": resposta}],
+    }
+    if "targets" in registro:
+        saida["targets"] = registro["targets"]
+    if "Collection" in registro:
+        saida["Collection"] = registro["Collection"]
+    return saida
 
 
 def task_c_um_turno(
@@ -184,6 +251,7 @@ def task_c_um_turno(
     candidatos: int = 40,
     mapa_passagens: dict[str, dict] | None = None,
     expandir_passagem_completa: bool = False,
+    max_context_chars: int | None = None,
 ) -> dict:
     mensagens = texto_para_mensagens(texto_query)
     historico, pergunta = historico_e_pergunta_atual(mensagens)
@@ -198,7 +266,7 @@ def task_c_um_turno(
         mapa_passagens=mapa_passagens,
         expandir_passagem_completa=expandir_passagem_completa,
     )
-    ctx = linha_a["contexts"]
+    ctx = limitar_contextos(linha_a["contexts"], max_context_chars)
     prompt = montar_prompt_rag(historico, pergunta, ctx)
     from local_llm import gerar_texto
 

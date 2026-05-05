@@ -11,6 +11,7 @@ from pathlib import Path
 RAIZ_REPO = Path(__file__).resolve().parent.parent
 CORPUS_PASSAGE_DIR = RAIZ_REPO / "semeval" / "corpora" / "passage_level"
 RETRIEVAL_DIR = RAIZ_REPO / "semeval" / "mtrag-human" / "retrieval_tasks"
+GENERATION_DIR = RAIZ_REPO / "semeval" / "mtrag-human" / "generation_tasks"
 
 DOMINIO_ATUAL: str = "govt"
 
@@ -81,4 +82,11 @@ def caminho_qrels_dev(dominio: str) -> Path:
     p = RETRIEVAL_DIR / dominio / "qrels" / "dev.tsv"
     if not p.is_file():
         raise FileNotFoundError(f"Qrels não encontrados: {p}")
+    return p
+
+
+def caminho_generation_reference() -> Path:
+    p = GENERATION_DIR / "reference.jsonl"
+    if not p.is_file():
+        raise FileNotFoundError(f"Generation reference não encontrado: {p}")
     return p
