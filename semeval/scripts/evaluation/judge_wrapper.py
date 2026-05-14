@@ -22,7 +22,10 @@ from ragas import evaluate
 from ragas.llms import LangchainLLMWrapper
 from ragas.run_config import RunConfig
 from langchain_core.language_models.llms import LLM
-from pydantic import PrivateAttr
+try:
+    from pydantic.v1 import PrivateAttr
+except ImportError:
+    from pydantic import PrivateAttr
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -64,10 +67,10 @@ class LocalLLM(LLM):
             config = AutoConfig.from_pretrained(mode_name_or_path, trust_remote_code=True)
             trust_remote_code = True
 
-        self._tokenizer = AutoTokenizer.from_pretrained(
+        object.__setattr__(self, "_tokenizer", AutoTokenizer.from_pretrained(
             mode_name_or_path,
             trust_remote_code=trust_remote_code,
-        )
+        ))
         
         if self._tokenizer.pad_token_id is None:
             self._tokenizer.pad_token_id = self._tokenizer.eos_token_id
@@ -80,10 +83,18 @@ class LocalLLM(LLM):
             attn_implementation="eager",
         )
         try:
-            self._model = AutoModelForCausalLM.from_pretrained(mode_name_or_path, **load_kw)
+            object.__setattr__(
+                self,
+                "_model",
+                AutoModelForCausalLM.from_pretrained(mode_name_or_path, **load_kw),
+            )
         except TypeError:
             load_kw.pop("attn_implementation", None)
-            self._model = AutoModelForCausalLM.from_pretrained(mode_name_or_path, **load_kw)
+            object.__setattr__(
+                self,
+                "_model",
+                AutoModelForCausalLM.from_pretrained(mode_name_or_path, **load_kw),
+            )
         try:
             self._model.generation_config = GenerationConfig.from_pretrained(mode_name_or_path)
         except Exception:

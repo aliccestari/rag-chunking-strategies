@@ -548,6 +548,8 @@ def cmd_gen_eval(args: argparse.Namespace) -> None:
         cmd.append("--skip-algorithmic")
     if getattr(args, "only_idk", False):
         cmd.append("--only-idk")
+    if getattr(args, "only_algorithmic", False):
+        cmd.append("--only-algorithmic")
 
     n_linhas = _count_nonempty_jsonl_lines(pred)
     orig = Path(args.predictions).resolve()
@@ -725,6 +727,11 @@ def main() -> None:
         "--only-idk",
         action="store_true",
         help="Roda só o juiz IDK rápido; não roda RAGAS/RadBench nem métricas condicionadas.",
+    )
+    pg.add_argument(
+        "--only-algorithmic",
+        action="store_true",
+        help="Roda só métricas algorítmicas (ROUGE/BERTScore/etc.) e não chama juízes LLM.",
     )
     pg.set_defaults(func=cmd_gen_eval)
 

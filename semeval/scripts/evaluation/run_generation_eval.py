@@ -73,6 +73,12 @@ def args_parser():
         dest="only_idk",
         help="Only run/resume the fast IDK judge. Do not run RAGAS, RadBench, or IDK-conditioned metrics.",
     )
+    parser.add_argument(
+        "--only-algorithmic",
+        action="store_true",
+        dest="only_algorithmic",
+        help="Only run DeBERTa/ROUGE/BERTScore/etc. and stop before LLM judges.",
+    )
     return parser
 
 
@@ -98,6 +104,9 @@ if __name__ == "__main__":
             shutil.copyfile(in_path, out_path)
     else:
         run_algorithmic_judges(args.evaluators, args.input, args.output)
+
+    if args.only_algorithmic:
+        raise SystemExit(0)
     
     if args.provider == "openai":
         if not args.openai_key or not args.azure_host:

@@ -1,5 +1,6 @@
 .env
 .venv/
+.venv-eval/
 __pycache__/
 *.py[cod]
 *$py.class
@@ -12,6 +13,8 @@ tcc_implementation/timings_*.csv
 tcc_implementation/results/**/preds_*.jsonl
 tcc_implementation/results/**/eval_b_*.jsonl
 tcc_implementation/results/**/eval_c_*.jsonl
+tcc_implementation/results/**/ollama_judge_*.jsonl
+tcc_implementation/results/**/ollama_judge/summary.csv
 tcc_implementation/results/**/*backup*.jsonl
 tcc_implementation/results/**/timings_*.csv
 semeval/corpora/document_level/*.jsonl
