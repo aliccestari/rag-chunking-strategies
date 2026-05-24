@@ -1,0 +1,4 @@
+# Avaliação oficial SemEval (gen-eval).
+# Recomenda-se ambiente separado: `python -m venv .venv-eval && pip install -r requirements/eval.txt`.
+
+-r ../../semeval/scripts/evaluation/requirements.txt
