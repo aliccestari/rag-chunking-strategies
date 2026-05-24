@@ -44,12 +44,17 @@ Configuradas em `chunking_strategies.py`:
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements/base-lock.txt   # reprodutível
+pip install -e .                            # instala o pacote tcc_rag
 
 # (opcional) Avaliação oficial SemEval — venv separado
 python -m venv .venv-eval
 source .venv-eval/bin/activate
 pip install -r requirements/eval.txt
 ```
+
+`pip install -e .` instala o pacote em modo *editable* a partir de
+`pyproject.toml`: depois disso, `import tcc_rag` funciona de qualquer
+cwd e os scripts em `scripts/` resolvem os imports corretamente.
 
 Variáveis de ambiente em `.env` (raiz do repo):
 
@@ -72,9 +77,9 @@ Todos os comandos abaixo rodam **a partir de `tcc_implementation/`**.
 ### 1. Construir os índices (uma vez por domínio × estratégia)
 
 ```bash
-python criar_db.py --domain govt --strategy small
-python criar_db.py --domain govt --strategy large
-python criar_db.py --domain govt --strategy legacy
+python scripts/criar_db.py --domain govt --strategy small
+python scripts/criar_db.py --domain govt --strategy large
+python scripts/criar_db.py --domain govt --strategy legacy
 # multiscale reaproveita o índice "small"; não precisa rodar de novo
 ```
 
@@ -85,22 +90,22 @@ no `.gitignore` (cada um ocupa 0,5–1,4 GB).
 
 ```bash
 # Subtask A — retrieval
-python run_mtrag.py task-a --domain govt --queries lastturn \
+python scripts/run_mtrag.py task-a --domain govt --queries lastturn \
     --chunking small -o preds_a_small.jsonl
 
 # Subtask B — geração com passagens ouro
-python run_mtrag.py task-b --domain govt -o preds_b.jsonl
+python scripts/run_mtrag.py task-b --domain govt -o preds_b.jsonl
 
 # Subtask C — RAG end-to-end
-python run_mtrag.py task-c --domain govt --queries lastturn \
+python scripts/run_mtrag.py task-c --domain govt --queries lastturn \
     --chunking multiscale -o preds_c_ms.jsonl
 
 # Baseline sem retrieval (só LLM)
-python run_mtrag.py task-c --domain govt --queries lastturn \
+python scripts/run_mtrag.py task-c --domain govt --queries lastturn \
     --baseline noretrieval -o preds_c_nr.jsonl
 
 # Logar tempos por turno (CSV) para a análise H3
-python run_mtrag.py task-c --domain govt --chunking large \
+python scripts/run_mtrag.py task-c --domain govt --chunking large \
     --timing-log results/timings/govt/timings_govt_c_large.csv \
     -o preds.jsonl
 ```
@@ -109,19 +114,19 @@ python run_mtrag.py task-c --domain govt --chunking large \
 
 ```bash
 # Recall@k e nDCG@k para Subtask A
-python run_mtrag.py eval-a --domain govt --predictions preds_a_small.jsonl \
+python scripts/run_mtrag.py eval-a --domain govt --predictions preds_a_small.jsonl \
     -o metrics_a_small.json
 
 # Format check (formato oficial SemEval)
-python run_mtrag.py format-check --task c --domain govt \
+python scripts/run_mtrag.py format-check --task c --domain govt \
     --predictions preds_c_ms.jsonl
 
 # Generation eval (DeBERTa/ROUGE + juiz LLM) — usa .venv-eval
-python run_mtrag.py gen-eval --predictions preds_b.jsonl -o eval_b.jsonl \
+python scripts/run_mtrag.py gen-eval --predictions preds_b.jsonl -o eval_b.jsonl \
     --provider hf --judge-model ibm-granite/granite-3.3-8b-instruct
 
 # Retomar só os juízes (não repete DeBERTa/ROUGE; ~20 min/domínio):
-python run_mtrag.py gen-eval --predictions eval_b.jsonl -o eval_b.jsonl \
+python scripts/run_mtrag.py gen-eval --predictions eval_b.jsonl -o eval_b.jsonl \
     --skip-algorithmic --provider hf \
     --judge-model ibm-granite/granite-3.3-8b-instruct
 ```
@@ -130,10 +135,10 @@ python run_mtrag.py gen-eval --predictions eval_b.jsonl -o eval_b.jsonl \
 
 ```bash
 # Juiz Gemini (gratuito; usa GEMINI_API_KEY ou GOOGLE_API_KEY do .env)
-python run_gemini_judge.py --domain govt --strategy multiscale
+python scripts/run_gemini_judge.py --domain govt --strategy multiscale
 
 # Juiz Qwen 2.5 7B via Ollama
-python run_ollama_judge.py --domain govt --strategy multiscale
+python scripts/run_ollama_judge.py --domain govt --strategy multiscale
 ```
 
 Ambos suportam **retomada**: re-executar pula `task_id`s já avaliados.
@@ -141,7 +146,7 @@ Ambos suportam **retomada**: re-executar pula `task_id`s já avaliados.
 ### 5. Plots e tabelas finais
 
 ```bash
-python plot_results.py
+python scripts/plot_results.py
 # Gera figures/01_*.png ... figures/11_*.png + figures/tabela_*.csv
 ```
 
@@ -149,7 +154,7 @@ python plot_results.py
 
 ```bash
 # Pergunta única no terminal, usando o índice atual de DOMINIO_ATUAL
-python main.py
+python scripts/main.py
 # Por padrão usa o LLM local; export USE_GEMINI=1 para usar Gemini.
 ```
 
@@ -158,6 +163,7 @@ python main.py
 ```
 tcc_implementation/
 ├── README.md                   (este arquivo)
+├── pyproject.toml              metadados do pacote tcc_rag (PEP 621)
 ├── requirements.txt            (atalho → requirements/base-lock.txt)
 ├── requirements/
 │   ├── base.txt                deps diretas
@@ -165,24 +171,27 @@ tcc_implementation/
 │   ├── eval.txt                referência ao gen-eval do SemEval
 │   └── dev.txt                 ruff
 │
-├── corpus_config.py            caminhos por domínio + pasta_indice_chroma
-├── embeddings_config.py        BGE-small
-├── chunking_strategies.py      legacy / small / large / multiscale
-├── retrieval_core.py           recuperar_passagens_unicas + multiscale
-├── retrieval_metrics.py        Recall@k, nDCG@k
-├── mtrag_query_parse.py        parse de queries BEIR multi-turn
-├── mtrag_subtasks.py           task_a/b/c_um_turno
-├── rag_prompts.py              prompts de geração
-├── local_llm.py                backend ollama/hf
+├── src/tcc_rag/                pacote importável (biblioteca)
+│   ├── __init__.py             expõe __version__
+│   ├── corpus_config.py        caminhos por domínio + pasta_indice_chroma
+│   ├── embeddings_config.py    BGE-small
+│   ├── chunking_strategies.py  legacy / small / large / multiscale
+│   ├── retrieval_core.py       recuperar_passagens_unicas + multiscale
+│   ├── retrieval_metrics.py    Recall@k, nDCG@k
+│   ├── mtrag_query_parse.py    parse de queries BEIR multi-turn
+│   ├── mtrag_subtasks.py       task_a/b/c_um_turno
+│   ├── rag_prompts.py          prompts de geração
+│   └── local_llm.py            backend ollama/hf
 │
-├── criar_db.py                 CLI: construir índices Chroma
-├── run_mtrag.py                CLI: subtasks A/B/C + eval + format-check + gen-eval
-├── run_gemini_judge.py         CLI: juiz Gemini
-├── run_ollama_judge.py         CLI: juiz Qwen 2.5 7B via Ollama
-├── plot_results.py             CLI: figuras e tabelas finais
-├── count_dataset_tokens.py     estatística do dataset
-├── experiments_tcc.py          batch de experimentos
-├── main.py                     chat interativo (smoke test)
+├── scripts/                    CLIs (rodar com `python scripts/<x>.py`)
+│   ├── criar_db.py             construir índices Chroma
+│   ├── run_mtrag.py            subtasks A/B/C + eval + format-check + gen-eval
+│   ├── run_gemini_judge.py     juiz Gemini
+│   ├── run_ollama_judge.py     juiz Qwen 2.5 7B via Ollama
+│   ├── plot_results.py         figuras e tabelas finais
+│   ├── count_dataset_tokens.py estatística do dataset
+│   ├── experiments_tcc.py      batch de experimentos
+│   └── main.py                 chat interativo (smoke test)
 │
 ├── indices/                    (ignorado) índices Chroma — recriar com criar_db.py
 ├── results/                    artefatos de experimentos
@@ -206,8 +215,8 @@ tcc_implementation/
 ## Reproduzindo do zero
 
 1. Clonar o repo e baixar corpora (`semeval/corpora/passage_level/*.jsonl`).
-2. `pip install -r requirements/base-lock.txt`.
-3. `python criar_db.py --domain <dom> --strategy <s>` para cada
+2. `cd tcc_implementation && pip install -r requirements/base-lock.txt && pip install -e .`.
+3. `python scripts/criar_db.py --domain <dom> --strategy <s>` para cada
    combinação desejada.
 4. Rodar `run_mtrag.py task-a/b/c` para gerar predições.
 5. Rodar `run_gemini_judge.py` e/ou `run_ollama_judge.py` para Task C.
