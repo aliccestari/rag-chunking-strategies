@@ -45,7 +45,12 @@ def iter_linhas_queries(caminho: Path) -> Iterator[tuple[str, str]]:
 
 
 def carregar_mapa_passagens(caminho_corpus: Path) -> dict[str, dict]:
-    """id da passagem -> {text, title} (para Task B e textos no JSONL)."""
+    """id da passagem -> {text, title} (para Task B e textos no JSONL).
+    
+    Suporta os campos de ID usados nos diferentes domínios MTRAG:
+    - fiqa/clapnq: campo '_id'
+    - govt/cloud: campo 'document_id'
+    """
     m: dict[str, dict] = {}
     with caminho_corpus.open(encoding="utf-8") as f:
         for linha in f:
@@ -53,7 +58,7 @@ def carregar_mapa_passagens(caminho_corpus: Path) -> dict[str, dict]:
             if not linha:
                 continue
             reg = json.loads(linha)
-            pid = str(reg.get("_id") or reg.get("id") or "")
+            pid = str(reg.get("_id") or reg.get("id") or reg.get("document_id") or "")
             if not pid:
                 continue
             m[pid] = {
