@@ -59,7 +59,16 @@ def recuperar_passagens_unicas(
     saida: list[tuple[str, float, str, str]] = []
     for pid, (sc, texto, tit) in ordenado[:top_k]:
         if expandir_texto_passagem and mapa_passagem_completa:
+            # IDs no índice Chroma têm formato composto "{corpus_id}-{int}-{int}"
+            # (ex: "414940-0-474" ou "827849752_115-357-0-1033").
+            # Usamos rsplit para extrair o corpus_id correto mesmo quando ele
+            # contém hífens (ex: clapnq "827849752_115-357").
             info = mapa_passagem_completa.get(pid)
+            if info is None:
+                parts = pid.rsplit("-", 2)
+                if len(parts) == 3 and parts[1].isdigit() and parts[2].isdigit():
+                    base_pid = parts[0]
+                    info = mapa_passagem_completa.get(base_pid)
             if info:
                 texto = str(info.get("text") or texto)
                 tit = str(info.get("title") or tit)
