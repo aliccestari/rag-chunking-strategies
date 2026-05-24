@@ -1,5 +1,19 @@
 # MTRAG: Multi-Turn RAG Benchmark
 
+> [!NOTE]
+> Este repositório **estende o benchmark MTRAG da IBM** (Apache-2.0,
+> ver [LICENSE](LICENSE)) com a implementação do TCC de
+> **Alice Cestari Colares** — pipeline RAG local comparando
+> estratégias de chunking (`legacy`, `small`, `large`, `multiscale`)
+> sobre as Subtasks A/B/C do MTRAG.
+>
+> Todo o código próprio do TCC está em
+> [`tcc_implementation/`](tcc_implementation/) — veja o
+> [README do TCC](tcc_implementation/README.md) para setup, comandos
+> e reprodução dos resultados. O restante deste README é a
+> documentação original do MTRAG (IBM), preservada como referência
+> do dataset.
+
 **[Paper](#paper) | [Corpora](#corpora) | [Human Data](#human-data) | [Retrieval](#retrieval-tasks) | [Generation](#generation-tasks) | [Synthetic Data](#synthetic-data) | [Getting Started](#getting-started) |  [Contact](#contact)**
 
 We present MTRAG, a comprehensive and diverse human-generated multi-turn RAG dataset, accompanied by four document corpora. To the best of our knowledge, MTRAG is the first end-to-end human-generated multi-turn RAG benchmark that reflects real-world properties of multi-turn conversations.
