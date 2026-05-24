@@ -4,7 +4,7 @@ CLI para Subtasks A, B e C (corpus passage_level + índice Chroma local).
 
 Chunking / TCC (após criar índices com `python criar_db.py --domain X --strategy small|large|legacy`):
 
-  # Índices: legacy -> db_local_bge_<dom>; small -> db_local_bge_<dom>_small; large -> db_local_bge_<dom>_large
+  # Índices em indices/: legacy -> db_local_bge_<dom>; small -> db_local_bge_<dom>_small; large -> db_local_bge_<dom>_large
   # multiscale usa o índice *_small e expande o texto para a passagem completa na saída.
 
   python run_mtrag.py task-a --domain govt --queries lastturn --chunking small -o preds_a_small.jsonl
@@ -18,7 +18,7 @@ Chunking / TCC (após criar índices com `python criar_db.py --domain X --strate
 
 Exemplos com pasta manual:
 
-  python run_mtrag.py task-a --domain govt --queries lastturn --index-dir db_local_bge_govt -o preds_govt_a.jsonl
+  python run_mtrag.py task-a --domain govt --queries lastturn --index-dir indices/db_local_bge_govt -o preds_govt_a.jsonl
 
   python run_mtrag.py eval-a --domain govt --predictions preds_govt_a.jsonl -o metrics_govt_a.json
 
@@ -590,7 +590,7 @@ def main() -> None:
     pa.add_argument(
         "--index-dir",
         default=None,
-        help="Pasta Chroma (default: db_local_bge_<dom> ou _<estrategia> com --chunking)",
+        help="Pasta Chroma (default: indices/db_local_bge_<dom> ou _<estrategia> com --chunking)",
     )
     pa.add_argument(
         "--chunking",

@@ -14,6 +14,7 @@ tcc_implementation/.venv-*/
 .DS_Store
 
 # ─── Índices Chroma (gerados por criar_db.py) ──────────────
+tcc_implementation/indices/
 tcc_implementation/db_local_*/
 
 # ─── Logs e artefatos transitórios na raiz do TCC ──────────
@@ -33,6 +34,7 @@ tcc_implementation/results/**/ollama_judge_*.jsonl
 tcc_implementation/results/**/ollama_judge/summary.csv
 tcc_implementation/results/**/*backup*.jsonl
 tcc_implementation/results/**/timings_*.csv
+tcc_implementation/results/timings/
 
 # Diretórios de backup completos (mantemos localmente, não no git).
 tcc_implementation/results/**/*backup*/

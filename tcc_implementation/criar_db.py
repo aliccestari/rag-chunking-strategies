@@ -4,7 +4,7 @@ Script para criar a base vetorial (Chroma) a partir de documentos.
 Fluxo: carregar textos -> dividir em chunks (estratégia TCC) -> embeddings BGE -> salvar.
 
 Estratégias (--strategy):
-  legacy   — chunk 2000/500 (compatível com índices antigos `db_local_bge_<dom>`)
+  legacy   — chunk 2000/500 (compatível com índices antigos, agora em indices/db_local_bge_<dom>)
   small    — chunks pequenos (precisão na recuperação; base do multi-scale)
   large    — chunks longos (mais contexto por vetor)
   multiscale — alias: constrói o mesmo índice que `small` (recuperação fina + texto
