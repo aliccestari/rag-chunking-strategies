@@ -15,7 +15,7 @@ from typing import Any
 
 import pytrec_eval
 
-from corpus_config import COLLECTION_NAME, caminho_qrels_dev
+from .corpus_config import COLLECTION_NAME, caminho_qrels_dev
 
 
 def load_qrels(path: Path) -> dict[str, dict[str, int]]:

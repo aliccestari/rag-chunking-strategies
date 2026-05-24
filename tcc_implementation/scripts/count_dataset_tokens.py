@@ -17,7 +17,7 @@ import statistics
 import sys
 from pathlib import Path
 
-from corpus_config import CORPUS_PASSAGE_DIR, CORPUS_PASSAGE_FILES
+from tcc_rag.corpus_config import CORPUS_PASSAGE_DIR, CORPUS_PASSAGE_FILES
 
 DEFAULT_JSONL = [
     CORPUS_PASSAGE_DIR / CORPUS_PASSAGE_FILES[d]

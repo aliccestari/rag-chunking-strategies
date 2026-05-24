@@ -23,14 +23,14 @@ from langchain_chroma.vectorstores import Chroma
 from langchain_community.document_loaders import PyPDFDirectoryLoader
 from langchain_core.documents import Document
 
-from chunking_strategies import ChunkingStrategy, dividir_documentos
-from corpus_config import (
+from tcc_rag.chunking_strategies import ChunkingStrategy, dividir_documentos
+from tcc_rag.corpus_config import (
     CORPUS_PASSAGE_FILES,
     DOMINIO_ATUAL,
     caminho_corpus_passage,
     pasta_indice_chroma,
 )
-from embeddings_config import criar_funcao_embedding
+from tcc_rag.embeddings_config import criar_funcao_embedding
 
 load_dotenv()
 

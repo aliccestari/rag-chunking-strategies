@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-RAIZ_REPO = Path(__file__).resolve().parent.parent
+RAIZ_REPO = Path(__file__).resolve().parents[3]
 CORPUS_PASSAGE_DIR = RAIZ_REPO / "semeval" / "corpora" / "passage_level"
 RETRIEVAL_DIR = RAIZ_REPO / "semeval" / "mtrag-human" / "retrieval_tasks"
 GENERATION_DIR = RAIZ_REPO / "semeval" / "mtrag-human" / "generation_tasks"

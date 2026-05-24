@@ -14,10 +14,10 @@ from typing import Iterator
 
 from langchain_chroma.vectorstores import Chroma
 
-from corpus_config import COLLECTION_NAME
-from mtrag_query_parse import historico_e_pergunta_atual, texto_para_mensagens
-from rag_prompts import RAG_ANSWER_PROMPT
-from retrieval_core import abrir_indice, contexts_para_jsonl, recuperar_passagens_unicas
+from .corpus_config import COLLECTION_NAME
+from .mtrag_query_parse import historico_e_pergunta_atual, texto_para_mensagens
+from .rag_prompts import RAG_ANSWER_PROMPT
+from .retrieval_core import abrir_indice, contexts_para_jsonl, recuperar_passagens_unicas
 
 
 def num_turnos_utilizador(texto_query: str) -> int:

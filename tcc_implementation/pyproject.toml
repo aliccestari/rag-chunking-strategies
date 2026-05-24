@@ -1,0 +1,59 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tcc-rag"
+version = "0.1.0"
+description = "Pipeline RAG local do TCC: comparação de estratégias de chunking sobre o benchmark MTRAG (IBM)."
+authors = [{ name = "Alice Cestari Colares" }]
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+keywords = ["rag", "chunking", "mtrag", "retrieval", "tcc"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+# Deps diretas (mesma lista de requirements/base.txt).
+# Para reprodutibilidade exata use `pip install -r requirements/base-lock.txt`.
+dependencies = [
+    "python-dotenv",
+    "langchain",
+    "langchain-chroma",
+    "langchain-community",
+    "langchain-core",
+    "langchain-text-splitters",
+    "langchain-google-genai",
+    "sentence-transformers",
+    "transformers",
+    "accelerate",
+    "torch",
+    "pypdf",
+    "pytrec_eval",
+    "numpy",
+    "pandas",
+    "matplotlib",
+    "seaborn",
+]
+
+[project.optional-dependencies]
+dev = ["ruff>=0.6"]
+# eval/ não pode ser declarado aqui pois aponta para um requirements externo
+# com pinning conflitante; use diretamente:  pip install -r requirements/eval.txt
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["E501"]  # line too long — coberto pelo formatter

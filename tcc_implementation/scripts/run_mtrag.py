@@ -48,7 +48,7 @@ import tempfile
 import time
 from pathlib import Path
 
-from corpus_config import (
+from tcc_rag.corpus_config import (
     COLLECTION_NAME,
     RAIZ_REPO,
     caminho_corpus_passage,
@@ -56,7 +56,7 @@ from corpus_config import (
     caminho_queries_jsonl,
     pasta_indice_chroma,
 )
-from mtrag_subtasks import (
+from tcc_rag.mtrag_subtasks import (
     carregar_mapa_passagens,
     indice_para_dominio,
     iter_linhas_queries,
@@ -66,7 +66,7 @@ from mtrag_subtasks import (
     task_c_sem_rag_um_turno,
     task_c_um_turno,
 )
-from retrieval_metrics import eval_predictions_file
+from tcc_rag.retrieval_metrics import eval_predictions_file
 
 
 def _contar_linhas_jsonl_nao_vazias(caminho: Path) -> int:

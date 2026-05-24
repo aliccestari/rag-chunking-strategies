@@ -5,10 +5,10 @@ from langchain_core.messages import HumanMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 from dotenv import load_dotenv
 
-from corpus_config import pasta_indice_chroma
-from embeddings_config import criar_funcao_embedding
-from local_llm import gerar_texto
-from rag_prompts import RAG_ANSWER_PROMPT
+from tcc_rag.corpus_config import pasta_indice_chroma
+from tcc_rag.embeddings_config import criar_funcao_embedding
+from tcc_rag.local_llm import gerar_texto
+from tcc_rag.rag_prompts import RAG_ANSWER_PROMPT
 
 load_dotenv()
 

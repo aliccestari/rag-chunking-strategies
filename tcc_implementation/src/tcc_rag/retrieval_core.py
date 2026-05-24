@@ -11,7 +11,7 @@ from pathlib import Path
 
 from langchain_chroma.vectorstores import Chroma
 
-from embeddings_config import criar_funcao_embedding
+from .embeddings_config import criar_funcao_embedding
 
 
 def abrir_indice(persist_directory: str | Path) -> Chroma:

@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import argparse
 
-from corpus_config import CORPUS_PASSAGE_FILES
+from tcc_rag.corpus_config import CORPUS_PASSAGE_FILES
 
 DOMINIOS_MTRAG = sorted(CORPUS_PASSAGE_FILES.keys())
 

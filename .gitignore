@@ -2,6 +2,10 @@
 __pycache__/
 *.py[cod]
 *$py.class
+*.egg-info/
+.ruff_cache/
+build/
+dist/
 
 # ─── Ambientes virtuais ────────────────────────────────────
 .env
