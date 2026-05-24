@@ -1,25 +1,50 @@
-.env
-.venv/
-.venv-eval/
+# ─── Python ────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
 *$py.class
+
+# ─── Ambientes virtuais ────────────────────────────────────
+.env
+.venv/
+.venv-eval/
+tcc_implementation/.venv/
+tcc_implementation/.venv-*/
+
+# ─── macOS ─────────────────────────────────────────────────
 .DS_Store
+
+# ─── Índices Chroma (gerados por criar_db.py) ──────────────
 tcc_implementation/db_local_*/
+
+# ─── Logs e artefatos transitórios na raiz do TCC ──────────
 tcc_implementation/preds_*.jsonl
 tcc_implementation/eval_b_*.jsonl
 tcc_implementation/*backup*.jsonl
 tcc_implementation/timings_*.csv
+
+# ─── Outputs de experimentos (results/) ────────────────────
+# Predições e avaliações volumosas: regeráveis a partir do código.
 tcc_implementation/results/**/preds_*.jsonl
 tcc_implementation/results/**/eval_b_*.jsonl
 tcc_implementation/results/**/eval_c_*.jsonl
+tcc_implementation/results/**/gemini_judge_*.jsonl
+tcc_implementation/results/**/gemini_judge/summary.csv
 tcc_implementation/results/**/ollama_judge_*.jsonl
 tcc_implementation/results/**/ollama_judge/summary.csv
 tcc_implementation/results/**/*backup*.jsonl
 tcc_implementation/results/**/timings_*.csv
+
+# Diretórios de backup completos (mantemos localmente, não no git).
+tcc_implementation/results/**/*backup*/
+
+# Logs de execução soltos.
+tcc_implementation/results/**/terminal
+tcc_implementation/results/**/terminal.*
+
+# ─── Corpora MTRAG (descompactados/zips locais) ────────────
 semeval/corpora/document_level/*.jsonl
 semeval/corpora/document_level/*.zip
+semeval/corpora/document_level/zip/
 semeval/corpora/passage_level/*.jsonl
 semeval/corpora/passage_level/*.zip
-semeval/corpora/document_level/zip/
 semeval/corpora/passage_level/zip/
