@@ -34,10 +34,10 @@ Our benchmark is built on document corpora from 4 domains: ClapNQ, Cloud, FiQA a
 
 | Corpus | Domain  | Data | # Documents | # Passages |
 | ------------- |  ------------- | ------------- | ------------- | ------------- |
-|  ClapNQ [[1](https://github.com/primeqa/clapnq)] | Wikipedia | [Corpus](corpora/clapnq.jsonl.zip) | 4,293 | 183,408  |
-|  Cloud | Technical Documentation | [Corpus](corpora/cloud.json.zip) | 57,638 |  61,022  | 
-|  FiQA [[2](https://huggingface.co/datasets/BeIR/fiqa)] | Finance | [Corpus](corpora/fiqa.jsonl.zip) | 7,661 | 49,607 |
-|  Govt | Government  | [Corpus](corpora/govt.jsonl.zip) | 8,578 | 72,422 |
+|  ClapNQ [[1](https://github.com/primeqa/clapnq)] | Wikipedia | [Corpus](semeval/corpora/passage_level/clapnq.jsonl.zip) | 4,293 | 183,408  |
+|  Cloud | Technical Documentation | [Corpus](semeval/corpora/passage_level/cloud.jsonl.zip) | 57,638 |  61,022  | 
+|  FiQA [[2](https://huggingface.co/datasets/BeIR/fiqa)] | Finance | [Corpus](semeval/corpora/passage_level/fiqa.jsonl.zip) | 7,661 | 49,607 |
+|  Govt | Government  | [Corpus](semeval/corpora/passage_level/govt.jsonl.zip) | 8,578 | 72,422 |
 
 
    
@@ -55,20 +55,20 @@ MTRAG consists of 110 multi-turn conversations that are converted to 842 evaluat
 
 ### Conversations
 
-We provide our benchmark of 110 conversations in conversation format [HERE](human/conversations/conversations.json). 
+We provide our benchmark of 110 conversations in conversation format [HERE](semeval/mtrag-human/conversations/conversations.json). 
 
 They average 7.7 turns per conversation. Each conversation is on a single corpus domain and includes a variety of question types, answerability and multi-turn dimensions. All conversations created by our annotators have gone through a review phase to ensure they are of high quality. During the review phase annotators could accept or reject conversations, and repair responses, passage relvance, and enrichments as needed. They were not allowed to edit the questions or passages as such changes could negatively affect the conversation flow.
 
 ### Retrieval Tasks
 
-The retrieval task per domain in BEIR format on the Answerable and Partial tasks only. Additional details are available in the retrieval [README](human/retrieval_tasks/README.md).
+The retrieval task per domain in BEIR format on the Answerable and Partial tasks only. Additional details are available in the retrieval [README](semeval/mtrag-human/retrieval_tasks/README.md).
 
 | Name  | Corpus | Queries |
 | ------------- |  ------------- | ------------- |
-|  ClapNQ |  [Corpus](corpora/clapnq.jsonl) | [Queries](human/retrieval_tasks/clapnq/) |
-|  Cloud |  [Corpus](corpora/cloud.jsonl) | [Queries](human/retrieval_tasks/cloud/) | 
-|  FiQA |   [Corpus](corpora/fiqa.jsonl) | [Queries](human/retrieval_tasks/fiqa/) |
-|  Govt |   [Corpus](corpora/govt.jsonl) | [Queries](human/retrieval_tasks/govt/) |
+|  ClapNQ |  [Corpus](semeval/corpora/passage_level/clapnq.jsonl) | [Queries](semeval/mtrag-human/retrieval_tasks/clapnq/) |
+|  Cloud |  [Corpus](semeval/corpora/passage_level/cloud.jsonl) | [Queries](semeval/mtrag-human/retrieval_tasks/cloud/) | 
+|  FiQA |   [Corpus](semeval/corpora/passage_level/fiqa.jsonl) | [Queries](semeval/mtrag-human/retrieval_tasks/fiqa/) |
+|  Govt |   [Corpus](semeval/corpora/passage_level/govt.jsonl) | [Queries](semeval/mtrag-human/retrieval_tasks/govt/) |
 
 ### Generation Tasks
 
@@ -76,20 +76,20 @@ The conversations are converted into 842 tasks. A task is a conversation turn co
 
 | Setting  | Description | File |
 | ------------- | ------------- |  ------------- |
-| Reference  | Generation using reference passages | [reference.jsonl](human/generation_tasks/reference.jsonl) |  
-| Reference + RAG | Retrieval followed by generation but with the reference passages kept in the top 5 passages  | [reference+RAG.jsonl](human/generation_tasks/reference+RAG.jsonl) |
-| Full RAG | Retrieval followed by generation where retrieval results consist of the top 5 passages | [RAG.jsonl](human/generation_tasks/RAG.jsonl) |
+| Reference  | Generation using reference passages | [reference.jsonl](semeval/mtrag-human/generation_tasks/reference.jsonl) |  
+| Reference + RAG | Retrieval followed by generation but with the reference passages kept in the top 5 passages  | [reference+RAG.jsonl](semeval/mtrag-human/generation_tasks/reference+RAG.jsonl) |
+| Full RAG | Retrieval followed by generation where retrieval results consist of the top 5 passages | [RAG.jsonl](semeval/mtrag-human/generation_tasks/RAG.jsonl) |
 
 #### Results
 
-We provide generation results in the [analytics files](human/evaluations) for the experiments provided in our paper.
+We provide generation results in the [analytics files](semeval/mtrag-human/evaluations) for the experiments provided in our paper.
 
 | Setting  | Description | File |
 | ------------- | ------------- |  ------------- |
-| Reference  | Generation using reference passages | [reference.json](human/evaluations/reference.json) |  
-| Reference + RAG | Retrieval followed by generation but with the reference passages kept in the top 5 passages  | [reference+RAG.json](human/evaluations/reference+RAG.json) |
-| Full RAG | Retrieval followed by generation where retrieval results consist of the top 5 passages | [RAG.json](human/evaluations/RAG.json) |
-| Human Evaluation Reference  | Generation using reference passages on a subset with human evaluation | [reference_subset_with_human_evaluations.json](human/evaluations/reference_subset_with_human_evaluations.json) |  
+| Reference  | Generation using reference passages | [reference.json](semeval/mtrag-human/evaluations/reference.json) |  
+| Reference + RAG | Retrieval followed by generation but with the reference passages kept in the top 5 passages  | [reference+RAG.json](semeval/mtrag-human/evaluations/reference+RAG.json) |
+| Full RAG | Retrieval followed by generation where retrieval results consist of the top 5 passages | [RAG.json](semeval/mtrag-human/evaluations/RAG.json) |
+| Human Evaluation Reference  | Generation using reference passages on a subset with human evaluation | [reference_subset_with_human_evaluations.json](semeval/mtrag-human/evaluations/reference_subset_with_human_evaluations.json) |  
 
 ## Synthetic Data
 
@@ -97,28 +97,28 @@ Manually creating data is an expensive and time consuming process that does not 
 
 ###  Conversations
 
-We provide 200 synthetically generated conversations that follow the properties of the human data. The conversations are available [HERE](synthetic/conversations/)
+We provide 200 synthetically generated conversations that follow the properties of the human data. The conversations are available [HERE](semeval/mtrag-synthetic/conversations/)
     
 ### Generation Tasks
 
 | Setting  | Description | File |
 | ------------- | ------------- |  ------------- |
-| Reference  | Generation using reference passages. | [synthetic.jsonl](synthetic/generation_tasks/synthetic.jsonl) |  
+| Reference  | Generation using reference passages. | [synthetic.jsonl](semeval/mtrag-synthetic/generation_tasks/synthetic.jsonl) |  
 
 
 ## Getting Started
 
 ### Running Retrieval
 
-Retrieval experiments can be run using the BEIR codebase as described in the retrieval [README](human/retrieval_tasks/README.md). The corpus will need to be ingested to run experiments.
+Retrieval experiments can be run using the BEIR codebase as described in the retrieval [README](semeval/mtrag-human/retrieval_tasks/README.md). The corpus will need to be ingested to run experiments.
 
 ### Running Generation
 
-Generation experiments can be run using any desired models (e.g. available on HuggingFace) and settings as described in the generation [README](human/generation_tasks/README.md). 
+Generation experiments can be run using any desired models (e.g. available on HuggingFace) and settings as described in the generation [README](semeval/mtrag-human/generation_tasks/README.md). 
 
 ### Viewing Evaluations
 
-We provide [analytics files](human/evaluations) in InspectorRAGet format, which can be used to inspect the evaluation results and perform further analysis. Load any of the analytics files in [InspectorRAGet](https://huggingface.co/spaces/kpfadnis/InspectorRAGet) by clicking "Visualize" and follow the instructions shown on the screen.
+We provide [analytics files](semeval/mtrag-human/evaluations) in InspectorRAGet format, which can be used to inspect the evaluation results and perform further analysis. Load any of the analytics files in [InspectorRAGet](https://huggingface.co/spaces/kpfadnis/InspectorRAGet) by clicking "Visualize" and follow the instructions shown on the screen.
 
 ## Acknowledgements
 
