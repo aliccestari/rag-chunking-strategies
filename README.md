@@ -29,15 +29,18 @@ Yannis Katsis, Sara Rosenthal, Kshitij Fadnis, Chulaka Gunasekara, Young-Suk Lee
 
 Our benchmark is built on document corpora from 4 domains: ClapNQ, Cloud, FiQA and Govt. ClapNQ and FiQA are existing corpora from QA/IR datasets, while Govt and Cloud are new corpora assembled specifically for this benchmark. 
 
-> [!IMPORTANT]  
-> Download and uncompress the files to use the corpora.
+> [!IMPORTANT]
+> Os corpora não estão versionados neste repositório (são pesados).
+> Faça o download a partir do repositório upstream
+> [`IBM/mt-rag-benchmark`](https://github.com/IBM/mt-rag-benchmark/tree/main/corpora/passage_level)
+> e descompacte em `semeval/corpora/passage_level/` para rodar o pipeline do TCC.
 
 | Corpus | Domain  | Data | # Documents | # Passages |
 | ------------- |  ------------- | ------------- | ------------- | ------------- |
-|  ClapNQ [[1](https://github.com/primeqa/clapnq)] | Wikipedia | [Corpus](semeval/corpora/passage_level/clapnq.jsonl.zip) | 4,293 | 183,408  |
-|  Cloud | Technical Documentation | [Corpus](semeval/corpora/passage_level/cloud.jsonl.zip) | 57,638 |  61,022  | 
-|  FiQA [[2](https://huggingface.co/datasets/BeIR/fiqa)] | Finance | [Corpus](semeval/corpora/passage_level/fiqa.jsonl.zip) | 7,661 | 49,607 |
-|  Govt | Government  | [Corpus](semeval/corpora/passage_level/govt.jsonl.zip) | 8,578 | 72,422 |
+|  ClapNQ [[1](https://github.com/primeqa/clapnq)] | Wikipedia | [Corpus](https://github.com/IBM/mt-rag-benchmark/blob/main/corpora/passage_level/clapnq.jsonl.zip) | 4,293 | 183,408  |
+|  Cloud | Technical Documentation | [Corpus](https://github.com/IBM/mt-rag-benchmark/blob/main/corpora/passage_level/cloud.jsonl.zip) | 57,638 |  61,022  | 
+|  FiQA [[2](https://huggingface.co/datasets/BeIR/fiqa)] | Finance | [Corpus](https://github.com/IBM/mt-rag-benchmark/blob/main/corpora/passage_level/fiqa.jsonl.zip) | 7,661 | 49,607 |
+|  Govt | Government  | [Corpus](https://github.com/IBM/mt-rag-benchmark/blob/main/corpora/passage_level/govt.jsonl.zip) | 8,578 | 72,422 |
 
 
    
@@ -65,10 +68,10 @@ The retrieval task per domain in BEIR format on the Answerable and Partial tasks
 
 | Name  | Corpus | Queries |
 | ------------- |  ------------- | ------------- |
-|  ClapNQ |  [Corpus](semeval/corpora/passage_level/clapnq.jsonl) | [Queries](semeval/mtrag-human/retrieval_tasks/clapnq/) |
-|  Cloud |  [Corpus](semeval/corpora/passage_level/cloud.jsonl) | [Queries](semeval/mtrag-human/retrieval_tasks/cloud/) | 
-|  FiQA |   [Corpus](semeval/corpora/passage_level/fiqa.jsonl) | [Queries](semeval/mtrag-human/retrieval_tasks/fiqa/) |
-|  Govt |   [Corpus](semeval/corpora/passage_level/govt.jsonl) | [Queries](semeval/mtrag-human/retrieval_tasks/govt/) |
+|  ClapNQ |  [Corpus](https://github.com/IBM/mt-rag-benchmark/blob/main/corpora/passage_level/clapnq.jsonl.zip) | [Queries](semeval/mtrag-human/retrieval_tasks/clapnq/) |
+|  Cloud |  [Corpus](https://github.com/IBM/mt-rag-benchmark/blob/main/corpora/passage_level/cloud.jsonl.zip) | [Queries](semeval/mtrag-human/retrieval_tasks/cloud/) | 
+|  FiQA |   [Corpus](https://github.com/IBM/mt-rag-benchmark/blob/main/corpora/passage_level/fiqa.jsonl.zip) | [Queries](semeval/mtrag-human/retrieval_tasks/fiqa/) |
+|  Govt |   [Corpus](https://github.com/IBM/mt-rag-benchmark/blob/main/corpora/passage_level/govt.jsonl.zip) | [Queries](semeval/mtrag-human/retrieval_tasks/govt/) |
 
 ### Generation Tasks
 
