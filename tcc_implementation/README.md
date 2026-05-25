@@ -12,9 +12,8 @@ do MTRAG.
 - **Recuperação**: índice [Chroma](https://www.trychroma.com/) local +
   embeddings BGE-small (`BAAI/bge-small-en-v1.5`) via
   `sentence-transformers`, com MPS no Mac.
-- **Geração**: dois backends de LLM
-  - `ollama` — Llama 3.1 8B Q4 (default; precisa do daemon `ollama`).
-  - `hf` — Hugging Face Transformers (testado com Qwen 2.5 1.5B Instruct).
+- **Geração**: Llama 3.1 8B Q4 via Ollama (gerador fixo; o TCC isola
+  chunking como variável, por isso o gerador não é tratado como hiperparâmetro).
 - **Subtasks MTRAG**:
   - **A** — só retrieval (qrels e métricas oficiais).
   - **B** — geração com passagens ouro do MTRAG.
@@ -60,8 +59,7 @@ Variáveis de ambiente em `.env` (raiz do repo):
 
 ```ini
 GOOGLE_API_KEY=...           # main.py (chat) e run_gemini_judge.py
-LOCAL_LLM_BACKEND=ollama     # ou "hf"
-LOCAL_LLM_MODEL=llama3.1:8b  # ou "Qwen/Qwen2.5-1.5B-Instruct"
+LOCAL_LLM_MODEL=llama3.1:8b  # gerador Ollama usado nos experimentos do TCC
 OLLAMA_HOST=http://127.0.0.1:11434
 OLLAMA_NUM_CTX=8192          # janela de contexto (tokens) usada no TCC
 ```
@@ -181,7 +179,7 @@ tcc_implementation/
 │   ├── mtrag_query_parse.py    parse de queries BEIR multi-turn
 │   ├── mtrag_subtasks.py       task_a/b/c_um_turno
 │   ├── rag_prompts.py          prompts de geração
-│   └── local_llm.py            backend ollama/hf
+│   └── local_llm.py            cliente Ollama (Llama 3.1 8B Q4)
 │
 ├── scripts/                    CLIs (rodar com `python scripts/<x>.py`)
 │   ├── criar_db.py             construir índices Chroma
@@ -195,11 +193,11 @@ tcc_implementation/
 │
 ├── indices/                    (ignorado) índices Chroma — recriar com criar_db.py
 ├── results/                    artefatos de experimentos
-│   ├── llama/                  predições + avaliações por configuração
-│   ├── qwen/
-│   ├── task_a_retrieval/       metrics + predictions
+│   ├── llama/                  predições + avaliações com Llama 3.1 (gerador do TCC)
+│   ├── task_a_retrieval/       metrics + predictions de Subtask A
 │   └── timings/<dom>/          CSVs de latência por turno
-└── figures/                    figuras (PNG) e tabelas (CSV) finais do TCC
+├── figures/                    figuras (PNG) e tabelas (CSV) finais do TCC
+└── archive/                    (ignorado) material exploratório fora do escopo final
 ```
 
 ## Resultados versionados

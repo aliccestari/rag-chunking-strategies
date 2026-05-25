@@ -47,6 +47,9 @@ tcc_implementation/results/**/*backup*/
 tcc_implementation/results/**/terminal
 tcc_implementation/results/**/terminal.*
 
+# Material exploratório fora do escopo final do TCC (mantido localmente).
+tcc_implementation/archive/
+
 # ─── Corpora MTRAG (descompactados/zips locais) ────────────
 semeval/corpora/document_level/*.jsonl
 semeval/corpora/document_level/*.zip
