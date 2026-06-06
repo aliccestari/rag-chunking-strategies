@@ -2,8 +2,7 @@
 
 > [!NOTE]
 > Este repositório **estende o benchmark MTRAG da IBM** (Apache-2.0,
-> ver [LICENSE](LICENSE)) com a implementação do TCC de
-> **Alice Cestari Colares** — pipeline RAG local comparando
+> ver [LICENSE](LICENSE)) com a implementação do meu TCC (pipeline RAG local comparando)
 > estratégias de chunking (`legacy`, `small`, `large`, `multiscale`)
 > sobre as Subtasks A/B/C do MTRAG.
 >
