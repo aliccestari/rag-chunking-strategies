@@ -50,7 +50,7 @@ def carregar_jsonl(caminho: Path, limite: int | None) -> list[Document]:
             if not linha:
                 continue
             registro = json.loads(linha)
-            passage_id = registro.get("_id") or registro.get("id")
+            passage_id = registro.get("_id") or registro.get("id") or registro.get("document_id")
             texto = registro.get("text", "")
             titulo = registro.get("title", "") or ""
             if titulo:

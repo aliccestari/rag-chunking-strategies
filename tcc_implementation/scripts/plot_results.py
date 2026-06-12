@@ -20,10 +20,19 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import numpy as np
 import pandas as pd
-import seaborn as sns
+
+# Fontes maiores para legibilidade quando a figura é reduzida a \linewidth no PDF
+plt.rcParams.update({
+    "font.size": 13,
+    "axes.titlesize": 15,
+    "axes.labelsize": 13,
+    "xtick.labelsize": 12,
+    "ytick.labelsize": 12,
+    "legend.fontsize": 12,
+})
 
 # ── Caminhos ──────────────────────────────────────────────────────────────────
-ROOT = Path(__file__).parent
+ROOT = Path(__file__).resolve().parent.parent
 BASE_LLAMA = ROOT / "results/llama/llama3_1_8b_q4_ctx8192/evaluations"
 BASE_A     = ROOT / "results/task_a_retrieval/metrics"
 FIGURES    = ROOT / "figures"
@@ -186,7 +195,7 @@ def plot_task_a(df_a: pd.DataFrame):
             ax.text(bar.get_x() + bar.get_width() / 2, h + 0.005,
                     f"{h:.3f}", ha="center", va="bottom", fontsize=9)
 
-    fig.suptitle("Task A — Retrieval por Estratégia de Chunking\n(média de 4 domínios)",
+    fig.suptitle("Task A — Retrieval by Chunking Strategy\n(average over 4 domains)",
                  fontsize=14, fontweight="bold", y=1.01)
     fig.tight_layout()
     save(fig, "01_task_a_retrieval.png")
@@ -212,8 +221,8 @@ def plot_task_a_by_domain(df_a: pd.DataFrame):
     ax.set_xticks(x)
     ax.set_xticklabels(pivot.index, fontsize=11)
     ax.set_ylabel("nDCG@10", fontsize=11)
-    ax.set_title("Task A — nDCG@10 por Domínio e Estratégia", fontsize=13, fontweight="bold")
-    ax.legend(title="Estratégia", fontsize=9)
+    ax.set_title("Task A — nDCG@10 by Domain and Strategy", fontsize=13, fontweight="bold")
+    ax.legend(title="Strategy", fontsize=9)
     ax.spines[["top", "right"]].set_visible(False)
     ax.set_ylim(0, pivot.values.max() * 1.25)
     fig.tight_layout()
@@ -223,17 +232,17 @@ def plot_task_a_by_domain(df_a: pd.DataFrame):
 # ── Gráfico 3: Task C — RB_agg por estratégia (média de domínios) ────────────
 
 def plot_task_c_mean(df_c: pd.DataFrame):
-    avg = df_c.groupby("strategy")[["ROUGE-L", "BertScore-R", "RB_agg"]].mean()
+    avg = df_c.groupby("strategy")[["ROUGE-L", "BertScore-R", "BertScore-P", "RB_agg"]].mean()
     avg = avg.reindex(STRATEGIES_C)
     avg.index = [STRATEGY_LABELS[s] for s in avg.index]
     colors = [PALETTE_STRAT[s] for s in STRATEGIES_C]
 
-    fig, axes = plt.subplots(1, 3, figsize=(14, 5), sharey=False)
-    for ax, metric in zip(axes, ["RB_agg", "ROUGE-L", "BertScore-R"]):
+    fig, axes = plt.subplots(2, 2, figsize=(12, 9))
+    for ax, metric in zip(axes.flat, ["RB_agg", "ROUGE-L", "BertScore-R", "BertScore-P"]):
         bars = ax.bar(avg.index, avg[metric], color=colors, edgecolor="white", width=0.6)
-        ax.set_title(metric, fontsize=12, fontweight="bold")
-        ax.set_ylabel("Score", fontsize=10)
-        ax.tick_params(axis="x", rotation=20)
+        ax.set_title(metric, fontsize=16, fontweight="bold")
+        ax.set_ylabel("Score", fontsize=13)
+        ax.tick_params(axis="x", rotation=20, labelsize=12)
         ax.spines[["top", "right"]].set_visible(False)
         ymax = avg[metric].max()
         ax.set_ylim(min(0, avg[metric].min() - 0.02), ymax * 1.25)
@@ -241,10 +250,10 @@ def plot_task_c_mean(df_c: pd.DataFrame):
             h = bar.get_height()
             if h > 0:
                 ax.text(bar.get_x() + bar.get_width() / 2, h + ymax * 0.01,
-                        f"{h:.3f}", ha="center", va="bottom", fontsize=8.5)
+                        f"{h:.3f}", ha="center", va="bottom", fontsize=11)
 
-    fig.suptitle("Task C — Geração RAG por Estratégia de Chunking\n(média de 4 domínios, Llama 3.1 8B Q4)",
-                 fontsize=13, fontweight="bold", y=1.02)
+    fig.suptitle("Task C — RAG Generation by Chunking Strategy\n(average over 4 domains, Llama 3.1 8B Q4)",
+                 fontsize=16, fontweight="bold", y=1.00)
     fig.tight_layout()
     save(fig, "03_task_c_mean_metrics.png")
 
@@ -276,8 +285,8 @@ def plot_task_c_by_domain(df_c: pd.DataFrame):
     ax.set_xticks(x)
     ax.set_xticklabels(pivot.index, fontsize=11)
     ax.set_ylabel("RB_agg", fontsize=11)
-    ax.set_title("Task C — RB_agg por Domínio e Estratégia de Chunking", fontsize=13, fontweight="bold")
-    ax.legend(title="Estratégia", fontsize=9, loc="upper right")
+    ax.set_title("Task C — RB_agg by Domain and Chunking Strategy", fontsize=13, fontweight="bold")
+    ax.legend(title="Strategy", fontsize=9, loc="upper right")
     ax.spines[["top", "right"]].set_visible(False)
     ax.set_ylim(0, pivot.values.max() * 1.25)
     fig.tight_layout()
@@ -293,12 +302,21 @@ def plot_heatmap(df_c: pd.DataFrame):
     pivot.columns = [STRATEGY_LABELS[s] for s in pivot.columns]
 
     fig, ax = plt.subplots(figsize=(9, 4))
-    sns.heatmap(pivot, annot=True, fmt=".3f", cmap="YlGn",
-                linewidths=0.5, ax=ax, vmin=0, vmax=0.5,
-                annot_kws={"size": 11})
-    ax.set_title("Task C — RB_agg por Domínio × Estratégia", fontsize=13, fontweight="bold")
-    ax.set_xlabel("Estratégia", fontsize=11)
-    ax.set_ylabel("Domínio", fontsize=11)
+    data = pivot.values.astype(float)
+    im = ax.imshow(data, cmap="YlGn", vmin=0, vmax=0.5, aspect="auto")
+    ax.set_xticks(np.arange(len(pivot.columns)))
+    ax.set_xticklabels(pivot.columns)
+    ax.set_yticks(np.arange(len(pivot.index)))
+    ax.set_yticklabels(pivot.index)
+    for i in range(data.shape[0]):
+        for j in range(data.shape[1]):
+            val = data[i, j]
+            ax.text(j, i, f"{val:.3f}", ha="center", va="center",
+                    color="white" if val > 0.35 else "black", fontsize=11)
+    fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+    ax.set_title("Task C — RB_agg by Domain × Strategy", fontsize=13, fontweight="bold")
+    ax.set_xlabel("Strategy", fontsize=11)
+    ax.set_ylabel("Domain", fontsize=11)
     fig.tight_layout()
     save(fig, "05_heatmap_rb_agg.png")
 
@@ -307,23 +325,22 @@ def plot_heatmap(df_c: pd.DataFrame):
 
 def plot_baseline_comparison(df_b: pd.DataFrame):
     baselines = {
-        "Reference\n(teto)":    0.89,
+        "Reference\n(ceiling)":  0.89,
         "GPT-4o":               0.60,
         "Qwen 2.5 7B":          0.55,
         "Llama 3.1 8B\n(paper)":0.45,
-        "Seu sistema\n(RB_agg)": df_b["RB_agg"].mean(),
-        "Llama 3.1 8B\n1.5B Qwen\n(inicial)": None,  # placeholder, skip
+        "Our system\n(RB_agg)": df_b["RB_agg"].mean(),
     }
-    # só os que têm valor
-    labels = ["Reference\n(teto)", "GPT-4o", "Qwen 2.5 7B",
-              "Llama 3.1 8B\n(paper)", "Seu sistema\n(RB_agg)"]
+    # only the ones with a value
+    labels = ["Reference\n(ceiling)", "GPT-4o", "Qwen 2.5 7B",
+              "Llama 3.1 8B\n(paper)", "Our system\n(RB_agg)"]
     values = [0.89, 0.60, 0.55, 0.45, round(df_b["RB_agg"].mean(), 4)]
     colors_bar = ["#2ca02c", "#ff7f0e", "#9467bd", "#1f77b4", "#d62728"]
 
     fig, ax = plt.subplots(figsize=(10, 5))
     bars = ax.bar(labels, values, color=colors_bar, edgecolor="white", width=0.5)
     ax.set_ylabel("HM3 / RB_agg", fontsize=11)
-    ax.set_title("Task B — Comparação com Baselines Oficiais MTRAG\n(mesmo conjunto público, 842 instâncias)",
+    ax.set_title("Task B — Comparison with Official MTRAG Baselines\n(same public set, 842 instances)",
                  fontsize=12, fontweight="bold")
     ax.set_ylim(0, 1.0)
     ax.axhline(0.45, color="#1f77b4", linestyle="--", linewidth=1, alpha=0.5)
@@ -334,7 +351,7 @@ def plot_baseline_comparison(df_b: pd.DataFrame):
 
     # nota de rodapé
     ax.text(0.5, -0.18,
-            "* Baselines (HM3) incluem RB_llm e RL_F além de RB_alg. Seu sistema calculou apenas RB_alg (RB_agg).",
+            "* Baselines (HM3) include RB_llm and RL_F in addition to RB_alg. Our system computed only RB_alg (RB_agg).",
             transform=ax.transAxes, ha="center", fontsize=8, color="gray")
     fig.tight_layout()
     save(fig, "06_baseline_comparison.png")
@@ -357,31 +374,31 @@ def plot_judge_comparison(qwen: pd.DataFrame, gemini: pd.DataFrame):
     for ax, metric, label in zip(
         axes,
         ["faithfulness_mean", "answer_relevance_mean"],
-        ["Faithfulness (média)", "Answer Relevance (média)"]
+        ["Faithfulness (mean)", "Answer Relevance (mean)"]
     ):
         q_vals = q_avg[metric].values
         g_vals = g_avg[metric].values
 
-        b1 = ax.bar(x - width/2, q_vals, width, label="Qwen 2.5 7B (local, escala 1–5)",
+        b1 = ax.bar(x - width/2, q_vals, width, label="Qwen 2.5 7B (local)",
                     color="#1f77b4", edgecolor="white")
-        b2 = ax.bar(x + width/2, g_vals, width, label="Gemini 3.1 Flash Lite (amostra, escala 1–5)",
+        b2 = ax.bar(x + width/2, g_vals, width, label="Gemini 3.1 Flash Lite (API)",
                     color="#ff7f0e", edgecolor="white")
 
         ax.set_xticks(x)
-        ax.set_xticklabels(strat_labels, rotation=15, fontsize=10)
-        ax.set_ylabel("Score (1–5)", fontsize=10)
-        ax.set_title(label, fontsize=12, fontweight="bold")
+        ax.set_xticklabels(strat_labels, rotation=15, fontsize=12)
+        ax.set_ylabel("Score (1–5)", fontsize=13)
+        ax.set_title(label, fontsize=15, fontweight="bold")
         ax.set_ylim(0, 5.5)
         ax.spines[["top", "right"]].set_visible(False)
-        ax.legend(fontsize=8)
+        ax.legend(fontsize=11)
 
         for bar in list(b1) + list(b2):
             h = bar.get_height()
             ax.text(bar.get_x() + bar.get_width() / 2, h + 0.05,
-                    f"{h:.2f}", ha="center", va="bottom", fontsize=8)
+                    f"{h:.2f}", ha="center", va="bottom", fontsize=10)
 
-    fig.suptitle("LLM-as-a-Judge — Qwen 2.5 7B (completo) vs Gemini 3.1 Flash Lite (amostra estratificada)\nTask C, média de 4 domínios",
-                 fontsize=12, fontweight="bold", y=1.02)
+    fig.suptitle("LLM-as-a-Judge — Qwen 2.5 7B vs Gemini 3.1 Flash Lite\n(paired stratified sample of 400, identical prompt — Task C, 4 domains)",
+                 fontsize=15, fontweight="bold", y=1.02)
     fig.tight_layout()
     save(fig, "07_judge_comparison.png")
 
@@ -399,7 +416,7 @@ def plot_rag_gain(df_c: pd.DataFrame):
     bars = ax.bar(gains.index, gains.values, color=colors_gain, edgecolor="white", width=0.5)
     ax.axhline(0, color="gray", linewidth=0.8)
     ax.set_ylabel("Δ RB_agg vs No-Retrieval", fontsize=11)
-    ax.set_title("Ganho do RAG sobre o Baseline Sem Retrieval\n(Task C — média de 4 domínios)",
+    ax.set_title("RAG Gain over the No-Retrieval Baseline\n(Task C — average over 4 domains)",
                  fontsize=12, fontweight="bold")
     ax.spines[["top", "right"]].set_visible(False)
     for bar in bars:
@@ -422,22 +439,22 @@ def plot_hallucination(qwen: pd.DataFrame):
     fig, ax = plt.subplots(figsize=(9, 4.5))
     x = np.arange(len(strat_labels))
     width = 0.35
-    b1 = ax.bar(x - width/2, avg["hallucination_yes_rate"],   width, label="Alucinação (yes)",     color="#d62728", edgecolor="white")
-    b2 = ax.bar(x + width/2, avg["hallucination_partial_rate"], width, label="Alucinação (partial)", color="#ff7f0e", edgecolor="white")
+    b1 = ax.bar(x - width/2, avg["hallucination_yes_rate"],   width, label="Hallucination (yes)",     color="#d62728", edgecolor="white")
+    b2 = ax.bar(x + width/2, avg["hallucination_partial_rate"], width, label="Hallucination (partial)", color="#ff7f0e", edgecolor="white")
 
     ax.set_xticks(x)
-    ax.set_xticklabels(strat_labels, fontsize=10)
-    ax.set_ylabel("Taxa (0–1)", fontsize=11)
-    ax.set_title("Taxa de Alucinação por Estratégia — Qwen 2.5 7B Judge\nTask C, média de 4 domínios",
-                 fontsize=12, fontweight="bold")
+    ax.set_xticklabels(strat_labels, fontsize=12)
+    ax.set_ylabel("Rate (0–1)", fontsize=13)
+    ax.set_title("Hallucination Rate by Strategy — Qwen 2.5 7B Judge\nTask C, average over 4 domains",
+                 fontsize=15, fontweight="bold")
     ax.set_ylim(0, 0.35)
-    ax.legend(fontsize=9)
+    ax.legend(fontsize=11)
     ax.spines[["top", "right"]].set_visible(False)
     for bar in list(b1) + list(b2):
         h = bar.get_height()
         if h > 0.005:
             ax.text(bar.get_x() + bar.get_width() / 2, h + 0.003,
-                    f"{h:.2f}", ha="center", va="bottom", fontsize=8)
+                    f"{h:.2f}", ha="center", va="bottom", fontsize=10)
     fig.tight_layout()
     save(fig, "09_hallucination_rates.png")
 
@@ -446,13 +463,13 @@ def plot_hallucination(qwen: pd.DataFrame):
 
 def turn_band(n: int) -> str:
     if n <= 2:
-        return "Início\n(turnos 1–2)"
+        return "Early\n(turns 1–2)"
     elif n <= 5:
-        return "Meio\n(turnos 3–5)"
+        return "Middle\n(turns 3–5)"
     else:
-        return "Final\n(turnos 6+)"
+        return "Late\n(turns 6+)"
 
-TURN_ORDER = ["Início\n(turnos 1–2)", "Meio\n(turnos 3–5)", "Final\n(turnos 6+)"]
+TURN_ORDER = ["Early\n(turns 1–2)", "Middle\n(turns 3–5)", "Late\n(turns 6+)"]
 
 
 def load_task_c_by_turn() -> pd.DataFrame:
@@ -511,23 +528,23 @@ def plot_h3(df_turn: pd.DataFrame):
             h = bar.get_height()
             if h > 0.01:
                 ax.text(bar.get_x() + bar.get_width() / 2, h + 0.004,
-                        f"{h:.2f}", ha="center", va="bottom", fontsize=7)
+                        f"{h:.2f}", ha="center", va="bottom", fontsize=9)
 
     ax.set_xticks(x)
-    ax.set_xticklabels(TURN_ORDER, fontsize=11)
-    ax.set_ylabel("RB_agg (média)", fontsize=11)
+    ax.set_xticklabels(TURN_ORDER, fontsize=13)
+    ax.set_ylabel("RB_agg (mean)", fontsize=13)
     ax.set_title(
-        "H3 — RB_agg por Faixa de Turno e Estratégia de Chunking\n"
-        "(Task C, média de 4 domínios — Llama 3.1 8B Q4)",
-        fontsize=13, fontweight="bold"
+        "H3 — RB_agg by Turn Range and Chunking Strategy\n"
+        "(Task C, average over 4 domains — Llama 3.1 8B Q4)",
+        fontsize=15, fontweight="bold"
     )
-    ax.legend(title="Estratégia", fontsize=9, loc="upper right")
+    ax.legend(title="Strategy", fontsize=11, loc="upper right")
     ax.spines[["top", "right"]].set_visible(False)
     ax.set_ylim(0, pivot.values.max() * 1.30)
 
     # Footnote with sample sizes
     ns = agg[agg["strategy"] == "legacy"].set_index("band")["n"].reindex(TURN_ORDER)
-    footnote = "n por faixa (legacy): " + ", ".join(
+    footnote = "n per range (legacy): " + ", ".join(
         f"{b.split(chr(10))[0]}={int(v)}" for b, v in zip(TURN_ORDER, ns.values)
     )
     ax.text(0.5, -0.08, footnote, transform=ax.transAxes,
@@ -559,19 +576,19 @@ def plot_h3_line(df_turn: pd.DataFrame):
                 marker="o", label=STRATEGY_LABELS[strat],
                 color=PALETTE_STRAT[strat], linewidth=2, markersize=6)
 
-    ax.set_xlabel("Número do Turno na Conversa", fontsize=11)
-    ax.set_ylabel("RB_agg (média)", fontsize=11)
+    ax.set_xlabel("Turn Number in the Conversation", fontsize=11)
+    ax.set_ylabel("RB_agg (mean)", fontsize=11)
     ax.set_title(
-        "H3 — Evolução do RB_agg por Turno e Estratégia\n"
-        "(Task C, média de 4 domínios, turnos 1–8)",
+        "H3 — RB_agg Evolution by Turn and Strategy\n"
+        "(Task C, average over 4 domains, turns 1–8)",
         fontsize=13, fontweight="bold"
     )
     ax.set_xticks(range(1, 9))
-    ax.legend(title="Estratégia", fontsize=9)
+    ax.legend(title="Strategy", fontsize=9)
     ax.spines[["top", "right"]].set_visible(False)
     ax.set_ylim(0, 0.55)
     ax.text(0.5, -0.08,
-            "Turnos 9–10 omitidos por baixo volume amostral (n < 10).",
+            "Turns 9–10 omitted due to low sample size (n < 10).",
             transform=ax.transAxes, ha="center", fontsize=8, color="gray")
     fig.tight_layout()
     save(fig, "11_h3_turn_line.png")

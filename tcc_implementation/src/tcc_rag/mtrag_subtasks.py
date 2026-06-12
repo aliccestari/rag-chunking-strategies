@@ -208,7 +208,7 @@ def task_b_um_turno(
         max_context_chars=max_context_chars,
     )
     prompt = montar_prompt_rag(historico, pergunta, ctx)
-    from local_llm import gerar_texto
+    from .local_llm import gerar_texto
 
     resposta = gerar_texto(prompt, max_new_tokens=max_new_tokens)
     return {
@@ -229,7 +229,7 @@ def task_b_reference_um_turno(
     ctx = limitar_contextos(list(registro.get("contexts") or []), max_context_chars)
     historico, pergunta = historico_e_pergunta_de_input(mensagens)
     prompt = montar_prompt_rag(historico, pergunta, ctx)
-    from local_llm import gerar_texto
+    from .local_llm import gerar_texto
 
     resposta = gerar_texto(prompt, max_new_tokens=max_new_tokens)
     saida = {
@@ -257,9 +257,18 @@ def task_c_um_turno(
     mapa_passagens: dict[str, dict] | None = None,
     expandir_passagem_completa: bool = False,
     max_context_chars: int | None = None,
+    historico_mensagens: list[dict] | None = None,
 ) -> dict:
-    mensagens = texto_para_mensagens(texto_query)
-    historico, pergunta = historico_e_pergunta_atual(mensagens)
+    # Recuperação usa sempre `texto_query` (ex.: último turno).
+    # Geração: se for fornecido o histórico oficial multi-turn (input do
+    # reference.jsonl), usa-o conforme a especificação da Subtask C; caso
+    # contrário, mantém o comportamento antigo (apenas o turno do texto_query).
+    if historico_mensagens:
+        mensagens = list(historico_mensagens)
+        historico, pergunta = historico_e_pergunta_de_input(mensagens)
+    else:
+        mensagens = texto_para_mensagens(texto_query)
+        historico, pergunta = historico_e_pergunta_atual(mensagens)
     linha_a = task_a_um_turno(
         db,
         dominio,
@@ -273,7 +282,7 @@ def task_c_um_turno(
     )
     ctx = limitar_contextos(linha_a["contexts"], max_context_chars)
     prompt = montar_prompt_rag(historico, pergunta, ctx)
-    from local_llm import gerar_texto
+    from .local_llm import gerar_texto
 
     resposta = gerar_texto(prompt, max_new_tokens=max_new_tokens)
     return {
@@ -290,13 +299,18 @@ def task_c_sem_rag_um_turno(
     texto_query: str,
     dominio: str,
     max_new_tokens: int = 512,
+    historico_mensagens: list[dict] | None = None,
 ) -> dict:
     """Baseline: gerador sem documentos recuperados (contextos vazios)."""
-    mensagens = texto_para_mensagens(texto_query)
-    historico, pergunta = historico_e_pergunta_atual(mensagens)
+    if historico_mensagens:
+        mensagens = list(historico_mensagens)
+        historico, pergunta = historico_e_pergunta_de_input(mensagens)
+    else:
+        mensagens = texto_para_mensagens(texto_query)
+        historico, pergunta = historico_e_pergunta_atual(mensagens)
     ctx: list[dict] = []
     prompt = montar_prompt_rag(historico, pergunta, ctx)
-    from local_llm import gerar_texto
+    from .local_llm import gerar_texto
 
     resposta = gerar_texto(prompt, max_new_tokens=max_new_tokens)
     return {

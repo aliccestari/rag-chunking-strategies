@@ -258,6 +258,27 @@ def cmd_task_b(args: argparse.Namespace) -> None:
     )
 
 
+def _carregar_mapa_input_reference() -> dict[str, list[dict]]:
+    """task_id -> input multi-turn oficial (todos os turnos) do reference.jsonl.
+
+    Usado na geração da Subtask C para fornecer ao gerador o histórico completo
+    da conversa, conforme a especificação das generation tasks do MTRAG.
+    """
+    ref_path = caminho_generation_reference()
+    mapa: dict[str, list[dict]] = {}
+    with ref_path.open(encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            reg = json.loads(line)
+            tid = reg.get("task_id") or reg.get("_id")
+            if tid is None:
+                continue
+            mapa[str(tid)] = list(reg.get("input") or [])
+    return mapa
+
+
 def cmd_task_c(args: argparse.Namespace) -> None:
     t0_all = time.perf_counter()
     baseline = getattr(args, "baseline", "rag") or "rag"
@@ -268,6 +289,9 @@ def cmd_task_c(args: argparse.Namespace) -> None:
         pasta = _abrir_indice_arg(args)
         db = indice_para_dominio(pasta)
     caminho_q = caminho_queries_jsonl(args.domain, args.queries)
+    # Histórico oficial multi-turn por task_id (input do reference.jsonl), usado
+    # apenas na geração; a recuperação continua com a query escolhida (--queries).
+    mapa_input = _carregar_mapa_input_reference()
     total = _total_jobs(_contar_linhas_jsonl_nao_vazias(caminho_q), args.limit)
     out = Path(args.output)
     tf, tw = _abrir_timing_log(getattr(args, "timing_log", None))
@@ -286,6 +310,7 @@ def cmd_task_c(args: argparse.Namespace) -> None:
                         texto,
                         args.domain,
                         max_new_tokens=args.max_new_tokens,
+                        historico_mensagens=mapa_input.get(task_id),
                     )
                     dt = time.perf_counter() - t0_turn
                     if tw:
@@ -316,6 +341,7 @@ def cmd_task_c(args: argparse.Namespace) -> None:
                         mapa_passagens=mapa,
                         expandir_passagem_completa=expand,
                         max_context_chars=args.max_context_chars,
+                        historico_mensagens=mapa_input.get(task_id),
                     )
                     dt = time.perf_counter() - t0_turn
                     if tw:
@@ -365,7 +391,7 @@ _FORMAT_CHECK_MODE = {"a": "retrieval_taska", "b": "generation_taskb", "c": "rag
 
 def cmd_format_check(args: argparse.Namespace) -> None:
     """Chama format_checker.py com stub de task_id no mesmo universo da tarefa."""
-    from mtrag_subtasks import iter_linhas_queries
+    from tcc_rag.mtrag_subtasks import iter_linhas_queries
 
     script = RAIZ_REPO / "semeval/scripts/evaluation/format_checker.py"
     if not script.is_file():
