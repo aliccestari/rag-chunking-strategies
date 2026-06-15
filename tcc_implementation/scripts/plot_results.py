@@ -45,7 +45,7 @@ STRATEGIES_C = ["noretrieval", "small", "multiscale", "legacy", "large"]
 STRATEGY_LABELS = {
     "noretrieval": "No-Retrieval",
     "small":       "Small",
-    "multiscale":  "Multiscale",
+    "multiscale":  "Multi-scale",
     "legacy":      "Legacy",
     "large":       "Large",
 }
@@ -367,7 +367,7 @@ def plot_judge_comparison(qwen: pd.DataFrame, gemini: pd.DataFrame):
     q_avg = qwen.groupby("strategy")[["faithfulness_mean", "answer_relevance_mean"]].mean().reindex(strat_order)
     g_avg = gemini.groupby("strategy")[["faithfulness_mean", "answer_relevance_mean"]].mean().reindex(strat_order)
 
-    fig, axes = plt.subplots(1, 2, figsize=(13, 5), sharey=False)
+    fig, axes = plt.subplots(1, 2, figsize=(13, 5.6), sharey=False)
     x = np.arange(len(strat_order))
     width = 0.35
 
@@ -390,16 +390,17 @@ def plot_judge_comparison(qwen: pd.DataFrame, gemini: pd.DataFrame):
         ax.set_title(label, fontsize=15, fontweight="bold")
         ax.set_ylim(0, 5.5)
         ax.spines[["top", "right"]].set_visible(False)
-        ax.legend(fontsize=11)
-
         for bar in list(b1) + list(b2):
             h = bar.get_height()
             ax.text(bar.get_x() + bar.get_width() / 2, h + 0.05,
                     f"{h:.2f}", ha="center", va="bottom", fontsize=10)
 
     fig.suptitle("LLM-as-a-Judge — Qwen 2.5 7B vs Gemini 3.1 Flash Lite\n(paired stratified sample of 400, identical prompt — Task C, 4 domains)",
-                 fontsize=15, fontweight="bold", y=1.02)
-    fig.tight_layout()
+                 fontsize=15, fontweight="bold", y=0.98)
+    handles, labels = axes[0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc="lower center", ncol=2, frameon=False,
+               bbox_to_anchor=(0.5, 0.01), fontsize=11)
+    fig.tight_layout(rect=(0, 0.08, 1, 0.91))
     save(fig, "07_judge_comparison.png")
 
 
@@ -514,7 +515,7 @@ def plot_h3(df_turn: pd.DataFrame):
     n_pivot = agg.pivot(index="band", columns="strategy", values="n")
     n_pivot = n_pivot.reindex(index=TURN_ORDER, columns=STRATEGIES_C)
 
-    fig, ax = plt.subplots(figsize=(13, 5.5))
+    fig, ax = plt.subplots(figsize=(13, 6.2))
     x = np.arange(len(TURN_ORDER))
     n_strat = len(STRATEGIES_C)
     width = 0.14
@@ -527,8 +528,9 @@ def plot_h3(df_turn: pd.DataFrame):
         for j, bar in enumerate(bars):
             h = bar.get_height()
             if h > 0.01:
-                ax.text(bar.get_x() + bar.get_width() / 2, h + 0.004,
-                        f"{h:.2f}", ha="center", va="bottom", fontsize=9)
+                ax.text(bar.get_x() + bar.get_width() / 2, h + 0.006,
+                        f"{h:.2f}", ha="center", va="bottom", fontsize=9,
+                        clip_on=False)
 
     ax.set_xticks(x)
     ax.set_xticklabels(TURN_ORDER, fontsize=13)
@@ -538,19 +540,12 @@ def plot_h3(df_turn: pd.DataFrame):
         "(Task C, average over 4 domains — Llama 3.1 8B Q4)",
         fontsize=15, fontweight="bold"
     )
-    ax.legend(title="Strategy", fontsize=11, loc="upper right")
     ax.spines[["top", "right"]].set_visible(False)
-    ax.set_ylim(0, pivot.values.max() * 1.30)
+    ax.set_ylim(0, pivot.values.max() * 1.42)
+    ax.legend(fontsize=11, ncol=5, loc="upper center",
+              bbox_to_anchor=(0.5, -0.16), frameon=False)
 
-    # Footnote with sample sizes
-    ns = agg[agg["strategy"] == "legacy"].set_index("band")["n"].reindex(TURN_ORDER)
-    footnote = "n per range (legacy): " + ", ".join(
-        f"{b.split(chr(10))[0]}={int(v)}" for b, v in zip(TURN_ORDER, ns.values)
-    )
-    ax.text(0.5, -0.08, footnote, transform=ax.transAxes,
-            ha="center", fontsize=8, color="gray")
-
-    fig.tight_layout()
+    fig.tight_layout(rect=(0, 0.14, 1, 0.96))
     save(fig, "10_h3_turn_depth.png")
 
     # Also export table

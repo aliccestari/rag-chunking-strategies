@@ -19,6 +19,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.ticker import FuncFormatter
 
 ROOT = Path(__file__).resolve().parent.parent
 PREDS = ROOT / "results/llama/llama3_1_8b_q4_ctx8192/predictions/task_c"
@@ -32,7 +33,7 @@ DOMAIN_LABELS = {"clapnq": "ClapNQ", "fiqa": "FiQA", "cloud": "Cloud", "govt": "
 # noretrieval não tem contexto; comparamos as quatro estratégias de chunking
 STRATEGIES = ["small", "large", "multiscale", "legacy"]
 STRATEGY_LABELS = {"small": "Small", "large": "Large",
-                   "multiscale": "Multiscale", "legacy": "Legacy"}
+                   "multiscale": "Multi-scale", "legacy": "Legacy"}
 PALETTE = {"small": "#1f77b4", "large": "#ff7f0e",
            "multiscale": "#2ca02c", "legacy": "#9467bd"}
 
@@ -82,7 +83,7 @@ def collect() -> tuple[dict, float]:
 def main() -> None:
     means, overall_max = collect()
 
-    fig, ax = plt.subplots(figsize=(11, 6))
+    fig, ax = plt.subplots(figsize=(11.5, 6.2))
     x = np.arange(len(DOMAINS))
     width = 0.2
     offsets = np.linspace(-(len(STRATEGIES) - 1) / 2,
@@ -96,29 +97,38 @@ def main() -> None:
 
     # Linha do limite da janela de contexto
     ax.axhline(CTX_LIMIT_CHARS, color="#d62728", linestyle="--", linewidth=1.2)
-    ax.text(ax.get_xlim()[1], CTX_LIMIT_CHARS, "  ctx limit (~8192 tokens)",
+    ax.text(ax.get_xlim()[1], CTX_LIMIT_CHARS, "  context window (~8192 tokens)",
             color="#d62728", fontsize=12, va="bottom", ha="right")
 
     # Anotação do caso extremo
-    ax.annotate(f"max: {overall_max/1000:.0f}K chars",
+    ax.annotate(f"max assembled context: {overall_max/1000:.0f}K chars",
                 xy=(0.99, 0.97), xycoords="axes fraction",
                 ha="right", va="top", fontsize=12, color="#d62728",
                 fontweight="bold")
 
+    ax.text(0.01, 0.97, "Bars show assembled context, not individual chunk size",
+            transform=ax.transAxes, ha="left", va="top", fontsize=10,
+            color="#555555")
+
     ax.set_xticks(x)
     ax.set_xticklabels([DOMAIN_LABELS[d] for d in DOMAINS], fontsize=13)
     ax.tick_params(axis="y", labelsize=12)
-    ax.set_ylabel("Average context size (characters)", fontsize=13)
+    ax.set_ylabel("Average assembled context (characters, log scale)", fontsize=13)
     ax.set_title(
-        "Average Context Size Sent to the Generator\n"
-        "by Strategy and Domain (Subtask C)",
+        "Average Assembled Context Sent to the Generator\n"
+        "after Retrieval and Parent-Passage Expansion (Subtask C)",
         fontsize=15, fontweight="bold"
     )
-    ax.legend(title="Strategy", fontsize=11, title_fontsize=12)
+    ax.legend(title="Strategy", fontsize=11, title_fontsize=12,
+              loc="upper center", bbox_to_anchor=(0.5, -0.12),
+              ncol=len(STRATEGIES), frameon=False)
     ax.spines[["top", "right"]].set_visible(False)
-    ax.set_ylim(0, max(means.values()) * 1.15)
+    positive_means = [v for v in means.values() if v > 0]
+    ax.set_yscale("log")
+    ax.set_ylim(max(min(positive_means) * 0.6, 100), max(means.values()) * 2.0)
+    ax.yaxis.set_major_formatter(FuncFormatter(lambda x, _: f"{x/1000:.0f}K" if x >= 1000 else f"{x:.0f}"))
 
-    fig.tight_layout()
+    fig.tight_layout(rect=(0, 0.08, 1, 1))
     out = FIGURES / "fig_context_length.png"
     fig.savefig(out, dpi=150, bbox_inches="tight")
     plt.close(fig)
